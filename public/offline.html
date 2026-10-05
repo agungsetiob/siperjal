@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#4556A9">
+    <title>Tidak ada koneksi · SIPERJAL</title>
+    <link rel="icon" type="image/png" href="/icons/icon-192.png">
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: #F4F5FA; color: #000100;
+               font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .kartu { width: 100%; max-width: 380px; background: #fff; border-radius: 8px; padding: 28px 24px; text-align: center; box-shadow: 0 6px 20px #0001001f; }
+        .ikon { width: 64px; height: 64px; margin: 0 auto 16px; display: grid; place-items: center; border-radius: 999px; background: #FFF1C2; color: #8A5A00; }
+        h1 { margin: 0 0 8px; font-family: Impact, "Anton", sans-serif; font-weight: 400; font-size: 30px; line-height: 32px; text-transform: uppercase; letter-spacing: .5px; }
+        p { margin: 0 0 20px; font-size: 15px; line-height: 22px; color: #565B73; }
+        button { width: 100%; height: 52px; border: 0; border-radius: 4px; background: #4556A9; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
+        .merek { margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: Impact, "Anton", sans-serif; letter-spacing: .5px; color: #4556A9; }
+        .merek img { width: 24px; height: 24px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <main class="kartu">
+        <div class="ikon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg>
+        </div>
+        <h1>Tidak ada koneksi</h1>
+        <p>Halaman ini butuh internet. Isian yang sedang dikerjakan tetap tersimpan di HP dan terkirim otomatis saat online.</p>
+        <button type="button" onclick="location.reload()">Coba lagi</button>
+        <div class="merek"><img src="/icons/icon-192.png" alt=""> SIPERJAL</div>
+    </main>
+    <script>
+        // Muat ulang halaman yang tadi dibuka begitu sinyal kembali (event online tidak selalu terkirim di HP)
+        const cek = () => fetch(location.href, { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok && location.reload()).catch(() => {});
+        window.addEventListener('online', cek);
+        setInterval(cek, 5000);
+    </script>
+</body>
+</html>

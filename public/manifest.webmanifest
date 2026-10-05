@@ -1,0 +1,26 @@
+{
+    "name": "SIPERJAL — Sistem Informasi Perlengkapan Jalan",
+    "short_name": "SIPERJAL",
+    "description": "Usulan dan pemeliharaan perlengkapan jalan: ajukan, periksa, putuskan, pasang, dan laporkan kerusakan.",
+    "lang": "id",
+    "dir": "ltr",
+    "id": "/usulan",
+    "start_url": "/usulan?sumber=pwa",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#FFFFFF",
+    "theme_color": "#4556A9",
+    "categories": ["government", "utilities", "productivity"],
+    "icons": [
+        { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+        { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    ],
+    "shortcuts": [
+        { "name": "Ajukan", "short_name": "Ajukan", "description": "Usulan baru atau lapor kerusakan", "url": "/lapor?sumber=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+        { "name": "Pemeliharaan", "short_name": "Pemeliharaan", "description": "Laporan kerusakan", "url": "/pemeliharaan?sumber=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+        { "name": "Notifikasi", "short_name": "Notifikasi", "url": "/notifikasi?sumber=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+    ]
+}

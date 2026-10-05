@@ -1,0 +1,46 @@
+# SIPERJAL
+
+Aplikasi usulan perlengkapan jalan: Pengusul → Dishub (periksa 5 kriteria) → Bappeda (setujui per item) → Dishub (terpasang).
+Spesifikasi: `docs/sitemap.md`, `docs/design-brief.md`. Desain: pen.dev "Usul Jalan". Arah UX: **sesimpel & seinteraktif mungkin**.
+
+## Stack
+Laravel 13 · Livewire 4 (single-file component) · Alpine · Tailwind 4 · Leaflet (+ markercluster) + OSM/Nominatim · exifr · dompdf · spatie/simple-excel. DB dev: SQLite.
+
+## Peta kode
+- Halaman (Livewire SFC): `resources/views/pages/` — `beranda`, `lacak`, `masuk` (OTP email, tanpa password), `usulan/index` (daftar + tab per role + bulk Bappeda), `usulan/form` (ajukan/revisi 3 langkah), `laporan`, `pengaturan` (admin: pengguna, instansi, perlengkapan+harga SSH, wilayah & jalan; simpan otomatis + urungkan).
+- Komponen Livewire: `components/usulan/⚡detail.blade.php` (panel detail; tata letak berbeda untuk pengusul, Bappeda, dan Dishub/admin), `components/usulan/⚡lapangan.blade.php` (mode lapangan Dishub di HP: rute, sheet Tandai Terpasang), `components/⚡lonceng.blade.php`.
+- Halaman `pages/notifikasi` (HP) + email bermerek `resources/views/mail/usulan.blade.php`; kirim kabar lewat `App\Support\Kabar::kirim()` (jenis: baru, diperiksa, revisi, duplikat, disetujui, ditunda, ditolak, terpasang, koreksi).
+- Form revisi = satu halaman (hanya bagian yang ditandai Dishub); foto sebelum permintaan revisi diganti saat Kirim Ulang.
+- `UsulanItem::tandaiTerpasang()` / `batalTerpasang()` dipakai detail & mode lapangan.
+- Detail Dishub: dialog Tolak Item (per item, alasan cepat), Tandai Duplikat (tampilan banding dua arah), Ubah Keputusan = periksa dibuka ulang (`mengubah`, `simpanUbahDishub`). Bappeda: Ubah Keputusan di panel (`simpanUbahBappeda`, item terpasang terkunci). Item menyimpan `diputuskan_oleh`.
+- Tab Bappeda "Ditunda" dikelompokkan per tahun target + band pagu; pagu per tahun di `Pengaturan` kunci `pagu_{tahun}` (diatur Bappeda langsung di band).
+- Profil: komponen `components/⚡profil.blade.php` (modal desktop dari bar atas, halaman `/profil` di HP), simpan otomatis. Kanal WhatsApp belum tersambung (`usuljalan.whatsapp_aktif`).
+- Publik HP (beranda, lacak, masuk) punya tata letak sendiri (`lg:hidden` / `hidden lg:…`); `/lacak/{nomor}` yang tidak ada menampilkan state "Nomor tidak ditemukan", bukan 404.
+- Komponen Blade: `components/{badge,status,tombol,stepper,ikon-jenis,rupiah,toast,logo}.blade.php`, `components/usulan/{baris,kepala-daftar}.blade.php`.
+- Peta (Alpine, `resources/js/app.js`): `petaTerpasang` (beranda), `petaUsulan` (daftar Dishub: mode panel & peta penuh, `Alpine.store('peta')`), `petaTitik` (detail), `petaPilih` (form), `petaMini` (lacak).
+- Domain: `app/Models/Usulan.php` (`hitungStatus()`, `terlihatOleh()`, `kirim()`, `sekitar()`), `UsulanItem::estimasi()`, enum di `app/Enums` (StatusUsulan, StatusItem, Kriteria, Role).
+- Urungkan: `app/Support/Urungkan.php` (snapshot → toast "Urungkan" → event `urungkan` ditangani `usulan/index`).
+- Rekap/export: `app/Support/Rekap.php`, `LaporanExportController`.
+- Token warna/font: `resources/css/app.css` (`@theme`). Ikon: `@svg('lucide-…')`.
+- Foto: penampil layar penuh `<x-lihat-foto>` (ada di kedua layout), buka dengan `$dispatch('lihat-foto', { foto: UsulanFoto::galeri($foto), mulai })`. Foto demo: `database/seeders/foto/` via `FotoDemoSeeder` (hanya melengkapi yang belum berfoto).
+- Keadaan kosong/memuat/galat: `<x-kosong>` (ikon + judul + teks + satu aksi), kelas `.kerangka` untuk skeleton (`wire:loading.delay` dengan `wire:target`). Koneksi: `resources/js/app.js` — offline → aksi diantre & dikirim ulang saat online (banner di `layouts/app`); gagal saat online → toast "Coba lagi" / kartu "Detail gagal dimuat". Tombol Simpan & Berikutnya: Menyimpan… → Tersimpan → usulan berikutnya.
+- Pengaturan kecil: `config/usuljalan.php`.
+- PWA: `public/manifest.webmanifest`, `public/sw.js` (cache aset `/build`, `/icons`, livewire.js; halaman HTML **tidak** disimpan, offline → `public/offline.html`), ikon di `public/icons/`, meta di `partials/pwa` (kedua layout), store `$store.pwa` + tombol Pasang di Profil. Ubah `sw.js`/`offline.html` → naikkan `VERSI`.
+- Pemeliharaan (laporan kerusakan perlengkapan terpasang, desain pen.dev PM1–PM4): `app/Models/LaporanKerusakan.php` (`buat`, `tugaskan`, `cek`, `tolak`, `selesai`, `batalSelesai`, `langkah()`), enum `StatusLaporan`, foto `LaporanFoto` (pelapor/cek/hasil), kabar `LaporanBerubah` + `mail/laporan`. Halaman `pages/pemeliharaan/lapor` (`/lapor`, pengusul masuk; layar Ajukan: pilih Usulan baru / Lapor kerusakan), `pages/pemeliharaan/publik` (tanpa akun: `/lapor/{item}` dari popup peta beranda & halaman lacak, `/lapor/status/{nomor}`; honeypot + batas per IP; kabar ke `kontak_email` lewat `Notification::route`) & `pages/pemeliharaan/index` (pelapor: daftar+detail; Dishub desktop: daftar + `components/pemeliharaan/⚡detail` dengan dialog Tugaskan/Tolak/Selesai; tata letak sama dengan Usulan di HP & desktop — kepala `x-usulan.kepala-daftar` (prop `kategori`, `cari`), Peta = peta penuh `petaUsulan` + popover `partials/popup-laporan`; peta lapangan `components/pemeliharaan/⚡tugas` (Cek Kondisi / Selesai Diperbaiki) hanya muncul di HP saat Peta pada tab Ditugaskan/Perbaikan, seperti mode lapangan Siap Dipasang). Satu perlengkapan hanya punya satu laporan berjalan (`UsulanItem::laporanTerbuka`, pin beranda bercincin kuning). Pindah Usulan ↔ Pemeliharaan lewat `<x-kategori>` (Category Switch) di kepala daftar — **bukan** menu navbar. Stepper selalu **4 langkah** (Dilaporkan → Dicek petugas → Menunggu perbaikan → Selesai diperbaiki) lewat `<x-pemeliharaan.stepper>`; "Ditugaskan" hanya keterangan di langkah 2. Urungkan selesai: token `lpr-selesai:{id}` ditangani `pemeliharaan/index`. Peta: `petaSebaran` (pin ikon bila `ikon` diisi), `petaTugas`.
+- Halaman publik memakai `layouts/publik.blade.php` dengan parameter `nav` (beranda|lacak|masuk) & `footer` (lengkap|ringkas|tidak), sesuai frame P1–P3 di pen.dev. Foto desain ada di `public/img/`.
+- Panduan (Markdown, publik tanpa akun): isi di folder `panduan/{grup}/{nn}-{slug}.md` + `panduan/gambar/`; desain pen.dev PG1 (Desktop/HP) & frame "PANDUAN · Markdown → Komponen". `App\Support\Panduan` (frontmatter, bagian → blok: `p`, `daftar`, `callout`, `gambar` + penanda, `kode`), `PanduanController`, layout `layouts/panduan`, view `panduan/{index,artikel,_menu,_hasil,_blok}`, komponen `components/panduan/*` (callout, gambar, penanda, butir, judul-langkah). Menu samping, daftar isi (`daftarIsiPanduan`), dan cari (`cariPanduan`, tombol `/`) dibangun otomatis dari file; tambah panduan = tambah `.md` (lihat `panduan/README.md`). Grup menu (folder, urut di `Panduan::URUTAN_GRUP`): umum, pengusul, dishub, bappeda, petugas-lapangan, admin; 21 artikel, sebagian belum bergambar (tambah blok ` ```gambar ` kemudian). Teks UI di panduan harus persis dengan aplikasi; `PanduanTest` memeriksa tautan `.md` dan gambar. Titik masuk panduan: tombol **?** di bar atas desktop (`components/bantuan.blade.php`, Alpine `menuBantuan`, data dari `PanduanController@menu` → `Panduan::layarDari()` + `untukLayar()`; artikel menyebut layar lewat `layar: [..]` di frontmatter), tautan "Pertama kali?" di form Ajukan (HP; `panduanDurasi`), baris Bantuan di Profil HP, tautan panduan di email revisi (`Panduan::tautanKabar()`), dan meta Open Graph di artikel (pratinjau WhatsApp). Tes: `tests/Feature/PanduanTest.php`.
+- Data demo: `php artisan db:seed --class=DemoSeeder`.
+
+## Aturan
+- Status usulan selalu dihitung dari item lewat `hitungStatus()` — jangan set manual kecuali Draft/Revisi/Dibatalkan.
+- Harga satuan dikunci ke item saat disetujui Bappeda.
+- Aksi tidak diizinkan: sembunyikan di UI **dan** `abort_unless` di server.
+- Komponen Livewire bercabang `@if/@elseif/@else` di level atas: beri **baris kosong** sebelum tag root tiap cabang. Livewire menyisipkan `wire:id` ke tag pertama yang diawali baris baru; tanpa baris kosong, komentar `<!--[if BLOCK]>` menempel dan `wire:id` jatuh ke elemen anak → `wire:click` terkirim ke komponen induk.
+- Livewire 4: `wire:model.blur` tidak mengirim request; pakai `wire:model.live.blur` bila butuh hook `updated*` (simpan otomatis).
+- Kelas Tailwind baru baru muncul setelah `npm run build` (tanpa dev server Vite).
+- `wire:target` hanya cocok dengan nama properti/metode: `$set('pilih', …)` tidak bisa ditargetkan sebagai `pilih` → pakai metode (`pilihUsulan`, `gantiTab`).
+- Livewire 4: jaringan putus hanya memicu `fail` di hook `request` (bukan `commit`); `Livewire.find(id)` mengembalikan `$wire`, bukan komponen.
+- Alpine memanggil nilai ekspresi yang berupa fungsi (`x-show="fn"` menjalankan `fn`) — simpan penanda boolean terpisah dari callback.
+- Tes: `php artisan test` (tests/Feature/AlurUsulanTest.php, AlurPemeliharaanTest.php, PanduanTest.php).
+- SFC Livewire: `use` di blok PHP ikut ke view — jangan tambah `@use` alias yang sama (fatal). Komponen Blade anonim tetap butuh `@use`.
+- Elemen `wire:ignore` (mis. peta Leaflet) tidak dihapus saat morph: bungkus tiap langkah/cabang dengan `wire:key` berbeda.
