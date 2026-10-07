@@ -6,7 +6,7 @@ urutan: 1
 layar: [pengaturan-ssh]
 durasi: 3 menit
 perangkat: Desktop
-diperbarui: 2026-10-04
+diperbarui: 2026-10-06
 ---
 
 SSH (Standar Satuan Harga) adalah daftar harga yang dipakai aplikasi untuk memperkirakan biaya usulan. Hanya Admin yang bisa mengubahnya. Pengusul tidak melihat angka-angkanya.
@@ -84,8 +84,10 @@ penanda:
 
 Sakelar **Aktif** menyembunyikan jenis dari formulir pengajuan. Usulan lama tetap tersimpan.
 
+Untuk mengubah jenis yang sudah ada, klik langsung nama, keterangan, atau satuannya di daftar, ketik, lalu tekan Enter atau klik di luar kolom. Klik kotak ikon untuk mengganti **Ikon** dan **Warna pin**.
+
 > [!NOTE]
-> Nama, ikon, satuan, dan warna tidak bisa diubah setelah jenis dibuat. Yang bisa diubah hanya harga dan status aktif.
+> Perubahan tersimpan otomatis dan bisa dibatalkan lewat **Urungkan**. Nama dan satuan tidak boleh kosong; kalau dikosongkan, isian kembali seperti semula.
 
 ## 4. Siapkan harga tahun berikutnya
 

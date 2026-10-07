@@ -19,7 +19,7 @@ Usulan dibuat dari HP dan tersimpan otomatis di setiap langkah. Kalau sinyal put
 
 ## 1. Ambil foto dan cek lokasi
 
-Ketuk **Tambah foto** lalu foto kondisi jalan. Boleh sampai 10 foto. Alamat, desa, kecamatan, dan titik lokasi terisi sendiri dari foto pertama.
+Ketuk **Tambah foto** lalu foto kondisi jalan. Boleh sampai 10 foto. Alamat, kecamatan, desa, dan titik lokasi terisi sendiri dari foto pertama.
 
 ```gambar
 src: ../gambar/pengusul-ajukan-1.png
@@ -27,7 +27,7 @@ keterangan: Langkah 1 dari 3: Foto & Lokasi
 penanda:
   - [83.3, 29.9, "Tambah foto kondisi jalan. Maksimal 10 foto."]
   - [76.9, 47.4, "Geser pin kalau kurang tepat."]
-  - [87.2, 64.8, "Alamat, desa, dan kecamatan terisi sendiri. Boleh diperbaiki."]
+  - [87.2, 64.8, "Alamat, kecamatan, dan desa terisi sendiri dari peta. Kalau tidak terbaca, pilih sendiri."]
   - [82.1, 82.9, "Info usulan lain di dekat sini. Usulanmu tetap bisa dikirim."]
   - [89.7, 93.7, "Lanjut ke langkah berikutnya."]
 ```

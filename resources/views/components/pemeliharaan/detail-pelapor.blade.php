@@ -4,10 +4,11 @@
 @php
     $s = $l->status;
     $item = $l->item;
+    $nama = $l->jenis?->namaPendek() ?? 'Perlengkapan';
     $penjelasan = match ($s) {
         SL::Baru => 'Laporanmu sudah diterima. Dishub akan menugaskan petugas untuk cek ke lokasi.',
         SL::Ditugaskan => ($l->petugas?->name ?? 'Petugas').' akan cek kondisi di lokasi.',
-        SL::MenungguPerbaikan => 'Petugas sudah memastikan '.str($item->jenis->namaPendek())->lower().' rusak. Tim perbaikan Dishub akan datang ke lokasi.',
+        SL::MenungguPerbaikan => 'Petugas sudah memastikan '.str($nama)->lower().' rusak. Tim perbaikan Dishub akan datang ke lokasi.',
         SL::Selesai => 'Sudah diperbaiki. Terima kasih sudah melapor!',
         SL::Ditolak => 'Laporan tidak dilanjutkan: '.str($l->alasan_tolak)->lower().'. Kamu bisa lapor lagi bila rusak kembali.',
         SL::Dibatalkan => 'Laporan ini kamu batalkan.',
@@ -61,21 +62,23 @@
     <div class="flex flex-col gap-3">
         <span class="{{ $judulSeksi }}">Lokasi</span>
         @if ($l->lat())
-            <div class="h-36 overflow-hidden rounded-md" wire:ignore x-data="petaMini({{ $l->lat() }}, {{ $l->lng() }}, @js(svg('lucide-'.$item->jenis->ikon, 'size-4')->toHtml()))"></div>
+            <div class="h-36 overflow-hidden rounded-md" wire:ignore x-data="petaMini({{ $l->lat() }}, {{ $l->lng() }}, @js(svg('lucide-'.$l->ikon(), 'size-4')->toHtml()))"></div>
         @endif
         <div class="flex flex-col gap-0.5">
             <span class="text-base font-semibold">{{ $l->lokasi() }}</span>
-            <span class="text-sm text-fg-muted">{{ collect([$item->usulan->desa ? 'Ds. '.$item->usulan->desa->nama : null, $item->usulan->kecamatan ? 'Kec. '.$item->usulan->kecamatan->nama : null])->filter()->implode(' · ') }}</span>
+            <span class="text-sm text-fg-muted">{{ collect([$l->desa ? 'Ds. '.$l->desa->nama : null, $l->kecamatan ? 'Kec. '.$l->kecamatan->nama : null])->filter()->implode(' · ') }}</span>
         </div>
     </div>
 
     <div class="flex flex-col gap-3">
         <span class="{{ $judulSeksi }}">Perlengkapan</span>
         <div class="flex items-center gap-3">
-            <x-ikon-jenis :jenis="$item->jenis" ukuran="size-[22px]" class="size-11 shrink-0" />
+            @if ($l->jenis) <x-ikon-jenis :jenis="$l->jenis" ukuran="size-[22px]" class="size-11 shrink-0" /> @endif
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span class="text-base font-semibold">{{ $item->jenis->namaPendek() }}</span>
-                <span class="text-sm text-fg-muted">terpasang {{ $item->terpasang_at?->translatedFormat('j M Y') }} · dari usulan {{ $item->usulan->nomor }}</span>
+                <span class="text-base font-semibold">{{ $nama }}</span>
+                @if ($item)
+                    <span class="text-sm text-fg-muted">terpasang {{ $item->terpasang_at?->translatedFormat('j M Y') }} · dari usulan {{ $item->usulan->nomor }}</span>
+                @endif
             </span>
         </div>
     </div>
@@ -94,7 +97,7 @@
         @elseif ($s === SL::MenungguPerbaikan)
             <p class="text-center font-caption text-[13px] text-fg-muted">Laporan tidak bisa dibatalkan setelah dikonfirmasi petugas.</p>
         @elseif (in_array($s, [SL::Selesai, SL::Ditolak]))
-            <a href="{{ route('lapor', ['item' => $item->id]) }}" wire:navigate class="flex h-12 items-center justify-center gap-2 rounded-sm text-base font-semibold outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">@svg('lucide-wrench', 'size-[18px]') Lapor lagi bila rusak kembali</a>
+            <a href="{{ route('lapor', $item ? ['item' => $item->id] : ['jenis' => 'lapor']) }}" wire:navigate class="flex h-12 items-center justify-center gap-2 rounded-sm text-base font-semibold outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">@svg('lucide-wrench', 'size-[18px]') Lapor lagi bila rusak kembali</a>
         @endif
     </div>
 </div>

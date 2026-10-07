@@ -193,12 +193,31 @@ class AlurPemeliharaanTest extends TestCase
         // Halaman per role
         $this->actingAs($this->user('warga@usuljalan.test'))->get(route('pemeliharaan', $l))->assertOk()->assertSee($l->nomor);
         $this->get(route('lapor'))->assertOk()->assertSee('Mau ajukan apa?');
+        // Pilihan Usulan baru / Lapor kerusakan tetap ada di form Usulan agar bisa berpindah
+        $this->get(route('usulan.baru'))->assertOk()->assertSee('Lapor kerusakan')->assertSee(route('lapor', ['jenis' => 'lapor']), false);
         $this->actingAs($this->user('dishub@usuljalan.test'))->get(route('pemeliharaan', $l))->assertOk()->assertSee('Laporan masuk');
         $this->get(route('lapor'))->assertForbidden();
         // Dishub: daftar seperti Usulan (bukan peta lapangan); peta lapangan hanya saat Peta di tab Ditugaskan/Perbaikan
         $this->get(route('pemeliharaan', ['tab' => 'semua']))->assertOk()->assertSee('Laporan masuk')->assertSee($l->nomor)->assertDontSeeHtml('petaTugas(');
         $this->get(route('pemeliharaan', ['tab' => 'ditugaskan', 'mode' => 'peta']))->assertOk()->assertSeeHtml('petaTugas(');
         $this->actingAs($this->user('bappeda@usuljalan.test'))->get(route('pemeliharaan'))->assertForbidden();
+    }
+
+    public function test_admin_hanya_melihat_pemeliharaan(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $l = $this->lapor($this->terpasang());
+
+        $this->actingAs($this->user('admin@usuljalan.test'));
+        $this->get(route('pemeliharaan', $l))->assertOk()->assertSee($l->nomor);
+        Livewire::test('pemeliharaan.detail', ['laporanId' => $l->id])
+            ->assertSee('Tindak lanjut dilakukan oleh Dishub')
+            ->assertDontSee('Tugaskan Petugas')
+            ->call('buka', 'tugaskan')->assertForbidden();
+        Livewire::test('pemeliharaan.detail', ['laporanId' => $l->id])->call('tolak')->assertForbidden();
+        $this->get(route('pemeliharaan', ['tab' => 'ditugaskan', 'mode' => 'peta']))->assertOk()->assertDontSeeHtml('petaTugas(');
+        $this->assertSame(StatusLaporan::Baru, $l->fresh()->status);
     }
 
     public function test_tamu_melapor_tanpa_login_dan_dikabari_lewat_email(): void
@@ -294,6 +313,80 @@ class AlurPemeliharaanTest extends TestCase
         $this->get(route('lapor.item', $b->id))->assertNotFound();
         $this->get(route('lapor.item', 99999))->assertNotFound();
         $this->get(route('lapor.status', 'LPR-2026-99999'))->assertOk()->assertSee('Nomor tidak ditemukan');
+    }
+
+    public function test_lapor_di_titik_bebas_tanpa_perlengkapan_terpasang(): void
+    {
+        Notification::fake();
+        Storage::fake('public');
+        $warga = $this->user('warga@usuljalan.test');
+        $kec = \App\Models\Kecamatan::with('desa')->whereHas('desa')->firstOrFail();
+        $desa = $kec->desa->first();
+        $jenis = JenisPerlengkapan::aktif()->firstOrFail();
+
+        $this->actingAs($warga);
+        Livewire::test('pages::pemeliharaan.lapor')
+            ->set('pilihan', 'lapor')
+            ->call('lanjut')
+            ->assertHasErrors('lat')
+            // tap peta: kecamatan & desa dicocokkan dari nama Nominatim
+            ->call('aturLokasi', -3.5, 116.1, ['jalan' => 'Jl. Pelabuhan', 'kecamatan' => [$kec->nama], 'desa' => [$desa->nama]])
+            ->assertSet('kecamatan_id', $kec->id)
+            ->assertSet('desa_id', $desa->id)
+            ->assertSet('kecamatanManual', false)
+            ->call('lanjut')
+            ->assertSet('langkah', 2)
+            ->set('kerusakan', 'roboh')
+            ->set('foto', [UploadedFile::fake()->image('roboh.jpg')])
+            ->call('kirim')
+            ->assertHasErrors('jenisId')
+            ->set('jenisId', $jenis->id)
+            ->call('kirim')
+            ->assertHasNoErrors();
+
+        $l = LaporanKerusakan::latest('id')->firstOrFail();
+        $this->assertNull($l->usulan_item_id);
+        $this->assertSame($jenis->id, $l->jenis_perlengkapan_id);
+        $this->assertSame([-3.5, 116.1], [$l->lat(), $l->lng()]);
+        $this->assertSame([$kec->id, $desa->id], [$l->kecamatan_id, $l->desa_id]);
+        $this->assertSame('Jl. Pelabuhan', $l->lokasi());
+        $this->assertStringStartsWith($jenis->namaPendek(), $l->judul());
+        Notification::assertSentTo($this->user('dishub@usuljalan.test'), LaporanBerubah::class, fn ($n) => $n->jenis === 'kerusakan_baru');
+
+        // Dishub menangani laporan tanpa item sampai selesai & urungkan
+        $koordinator = $this->user('dishub@usuljalan.test');
+        $this->actingAs($koordinator);
+        $this->get(route('pemeliharaan', $l))->assertOk()->assertSee('Tidak tertaut data terpasang');
+        $l->tugaskan($this->user('petugas@usuljalan.test'));
+        $l->cek(true, [['file' => UploadedFile::fake()->image('cek.jpg')]], 'Tiang roboh');
+        $l->selesai([['file' => UploadedFile::fake()->image('hasil.jpg')]]);
+        $this->assertSame(StatusLaporan::Selesai, $l->fresh()->status);
+        $l->fresh()->batalSelesai();
+        $this->assertSame(StatusLaporan::MenungguPerbaikan, $l->fresh()->status);
+
+        $this->actingAs($warga)->get(route('pemeliharaan', $l))->assertOk()->assertSee($jenis->namaPendek());
+        auth()->logout();
+        $this->get(route('lapor.status', $l->nomor))->assertOk()->assertSee($jenis->namaPendek());
+    }
+
+    public function test_titik_dekat_perlengkapan_terpasang_bisa_ditautkan_dan_dilepas(): void
+    {
+        $item = $this->terpasang();
+        $this->actingAs($this->user('warga@usuljalan.test'));
+        $c = Livewire::test('pages::pemeliharaan.lapor')
+            ->set('pilihan', 'lapor')
+            ->call('aturLokasi', -3.4493, 116.0019, [])
+            ->assertSet('kecamatanManual', true)
+            ->assertSee('Perlengkapan terpasang di dekat titik ini')
+            ->call('pilih', $item->id)
+            ->assertSet('itemId', $item->id)
+            ->assertSet('jenisId', $item->jenis_perlengkapan_id)
+            ->assertSet('lat', -3.4492)
+            ->call('lepas')
+            ->assertSet('itemId', null)
+            ->assertSet('jenisId', null);
+        // titik jauh: tidak ada tawaran
+        $c->call('aturLokasi', -3.6, 116.3, [])->assertDontSee('Perlengkapan terpasang di dekat titik ini');
     }
 
     public function test_data_versi_lama_laporan_rusak_dipindahkan(): void

@@ -10,7 +10,7 @@ use Livewire\WithFileUploads;
 
 /**
  * Panel detail laporan kerusakan untuk koordinator Dishub / admin (desain PM1).
- * Tindak lanjut per status: Tugaskan Petugas · Tolak laporan · Tandai Selesai Diperbaiki.
+ * Tindak lanjut per status: Tugaskan Petugas · Tolak laporan · Tandai Selesai Diperbaiki — hanya Dishub; admin hanya melihat.
  */
 new class extends Component
 {
@@ -30,7 +30,7 @@ new class extends Component
     #[Computed]
     public function laporan(): LaporanKerusakan
     {
-        return LaporanKerusakan::with('item.jenis', 'item.usulan.desa', 'item.usulan.kecamatan', 'item.usulan.instansi', 'item.usulan.user', 'pelapor', 'petugas', 'penugas', 'penutup', 'foto')
+        return LaporanKerusakan::with('jenis', 'kecamatan', 'desa', 'item.usulan.instansi', 'item.usulan.user', 'pelapor', 'petugas', 'penugas', 'penutup', 'foto')
             ->findOrFail($this->laporanId);
     }
 
@@ -47,15 +47,21 @@ new class extends Component
         $l = $this->laporan;
         $radius = config('usuljalan.radius_berdekatan');
 
-        return LaporanKerusakan::aktif()->whereKeyNot($l->id)->with('item.usulan')->get()
-            ->filter(fn ($b) => $b->usulan_item_id === $l->usulan_item_id
+        return LaporanKerusakan::aktif()->whereKeyNot($l->id)->get()
+            ->filter(fn ($b) => ($l->usulan_item_id && $b->usulan_item_id === $l->usulan_item_id)
                 || ($l->lat() && $b->lat() && \App\Models\Usulan::jarak($l->lat(), $l->lng(), $b->lat(), $b->lng()) <= $radius))
             ->values();
     }
 
+    #[Computed]
+    public function kelola(): bool
+    {
+        return auth()->user()->hasRole(Role::Dishub);
+    }
+
     private function bolehKelola(): void
     {
-        abort_unless(auth()->user()->hasRole(Role::Dishub, Role::Admin), 403);
+        abort_unless($this->kelola, 403);
     }
 
     public function buka(string $dialog): void
@@ -116,7 +122,7 @@ new class extends Component
     $l = $this->laporan;
     $s = $l->status;
     $item = $l->item;
-    $asal = $item->usulan;
+    $asal = $item?->usulan;
     $fotoPelapor = $l->fotoJenis('pelapor');
     $fotoCek = $l->fotoJenis('cek');
     $fotoHasil = $l->fotoJenis('hasil');
@@ -144,7 +150,7 @@ new class extends Component
             <div class="flex min-w-0 flex-1 flex-col gap-1.5">
                 <h2 class="judul text-[34px] leading-9">{{ $l->judul() }}</h2>
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
-                    <span class="flex items-center gap-1.5">@svg('lucide-map-pin', 'size-4') {{ $l->lokasi() }}{{ $asal->kecamatan ? ', Kec. '.$asal->kecamatan->nama : '' }}</span>
+                    <span class="flex items-center gap-1.5">@svg('lucide-map-pin', 'size-4') {{ $l->lokasi() }}{{ $l->alamat && $l->kecamatan ? ', Kec. '.$l->kecamatan->nama : '' }}</span>
                     <span class="flex items-center gap-1.5">@svg('lucide-user-round', 'size-4') {{ $l->namaPelapor() }} · {{ $l->user_id ? 'Pelapor' : 'Pelapor tanpa akun' }}</span>
                     @if ($l->pelapor?->no_hp) <a href="tel:{{ $l->pelapor->no_hp }}" class="flex items-center gap-1.5 hover:text-fg">@svg('lucide-phone', 'size-4') {{ $l->pelapor->no_hp }}</a> @endif
                     @if ($l->kontak_email) <a href="mailto:{{ $l->kontak_email }}" class="flex items-center gap-1.5 hover:text-fg">@svg('lucide-mail', 'size-4') {{ $l->kontak_email }}</a> @endif
@@ -208,7 +214,7 @@ new class extends Component
         </div>
         <div class="flex flex-col overflow-hidden rounded-md bg-bg outline outline-1 -outline-offset-1 outline-line">
             @if ($l->lat())
-                <div class="min-h-[170px] flex-1" wire:ignore x-data="petaTitik({ lat: {{ $l->lat() }}, lng: {{ $l->lng() }} }, @js($this->berdekatan->filter(fn ($b) => $b->lat())->map(fn ($b) => ['lat' => $b->lat(), 'lng' => $b->lng()])->values()), {{ config('usuljalan.radius_berdekatan') }}, @js(svg('lucide-'.$item->jenis->ikon, 'size-[13px]')->toHtml()), @js(svg('lucide-wrench', 'size-[11px]')->toHtml()))"><div x-ref="peta" class="size-full min-h-[170px]"></div></div>
+                <div class="min-h-[170px] flex-1" wire:ignore x-data="petaTitik({ lat: {{ $l->lat() }}, lng: {{ $l->lng() }} }, @js($this->berdekatan->filter(fn ($b) => $b->lat())->map(fn ($b) => ['lat' => $b->lat(), 'lng' => $b->lng()])->values()), {{ config('usuljalan.radius_berdekatan') }}, @js(svg('lucide-'.$l->ikon(), 'size-[13px]')->toHtml()), @js(svg('lucide-wrench', 'size-[11px]')->toHtml()))"><div x-ref="peta" class="size-full min-h-[170px]"></div></div>
             @endif
             <div class="flex items-center justify-between gap-2 px-3.5 py-2.5 font-caption text-xs text-fg-muted">
                 <span>{{ number_format($l->lat() ?? 0, 5) }}, {{ number_format($l->lng() ?? 0, 5) }}</span>
@@ -240,6 +246,15 @@ new class extends Component
     </div>
 
     {{-- Perlengkapan terpasang --}}
+    @if (! $item)
+        <div class="flex flex-col gap-2.5">
+            <span class="{{ $judulSeksi }}">Perlengkapan</span>
+            <div class="flex items-center gap-3 rounded-md bg-bg p-3.5 outline outline-1 -outline-offset-1 outline-line">
+                @if ($l->jenis) <x-ikon-jenis :jenis="$l->jenis" class="size-10 shrink-0" /> @endif
+                <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">{{ $l->jenis?->namaPendek() ?? 'Perlengkapan' }}</span><span class="truncate font-caption text-xs text-fg-muted">Tidak tertaut data terpasang · titik dipilih pelapor</span></span>
+            </div>
+        </div>
+    @else
     <div class="flex flex-col gap-2.5">
         <span class="{{ $judulSeksi }}">Perlengkapan terpasang</span>
         <div class="grid gap-3 lg:grid-cols-3">
@@ -257,6 +272,7 @@ new class extends Component
             </div>
         </div>
     </div>
+    @endif
 
     {{-- Tindak lanjut --}}
     <div class="{{ $kartu }} flex flex-col gap-4">
@@ -294,7 +310,9 @@ new class extends Component
             <span class="flex items-center gap-1.5 text-sm font-semibold {{ $s === SL::Ditolak ? 'text-danger' : 'text-fg-muted' }}">@svg('lucide-circle-x', 'size-4') {{ $s === SL::Ditolak ? 'Ditolak: '.$l->alasan_tolak.' · oleh '.($l->penutup?->name ?? '—') : 'Dibatalkan oleh pelapor' }}</span>
         @endif
 
-        @if ($s->aktif())
+        @if ($s->aktif() && ! $this->kelola)
+            <span class="flex items-center gap-1.5 border-t border-line pt-4 font-caption text-xs text-fg-muted">@svg('lucide-eye', 'size-3.5') Tindak lanjut dilakukan oleh Dishub</span>
+        @elseif ($s->aktif())
             <div class="flex flex-wrap items-center gap-3 border-t border-line pt-4">
                 @if ($s === SL::MenungguPerbaikan)
                     <span class="flex items-center gap-1.5 font-caption text-xs text-fg-muted">@svg('lucide-bell', 'size-3.5') pelapor & petugas dikabari otomatis</span>

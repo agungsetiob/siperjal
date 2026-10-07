@@ -18,7 +18,7 @@
         <span @class(['flex items-center gap-1', 'font-semibold text-warning' => $menunggu && $hari > 7, 'text-fg-muted' => ! ($menunggu && $hari > 7)])>@svg('lucide-hourglass', 'size-3') {{ $umur }}</span>
     </div>
     <span class="flex w-full items-center gap-2">
-        <span class="text-accent">@svg('lucide-'.$l->item->jenis->ikon, 'size-4')</span>
+        <span class="text-accent">@svg('lucide-'.$l->ikon(), 'size-4')</span>
         <span class="truncate text-[15px] font-semibold">{{ $l->judul() }}</span>
     </span>
     <div class="flex w-full items-center gap-2 text-[13px] text-fg-muted">

@@ -36,7 +36,7 @@ new class extends Component
     {
         // data sama dengan tab daftar; tampilannya saja yang peta lapangan
         return LaporanKerusakan::where('status', $this->statusTab($this->tab))
-            ->with('item.jenis', 'item.usulan.desa', 'item.usulan.kecamatan', 'pelapor', 'penugas', 'petugas', 'foto')
+            ->with('jenis', 'kecamatan', 'desa', 'pelapor', 'penugas', 'petugas', 'foto')
             ->orderBy($this->tab === 'ditugaskan' ? 'ditugaskan_at' : 'dicek_at')->get();
     }
 
@@ -49,14 +49,14 @@ new class extends Component
             'no' => $n + 1,
             'lat' => $l->lat(),
             'lng' => $l->lng(),
-            'ikon' => svg('lucide-'.$l->item->jenis->ikon, 'size-4')->toHtml(),
+            'ikon' => svg('lucide-'.$l->ikon(), 'size-4')->toHtml(),
         ])->all();
     }
 
     #[Computed]
     public function laporan(): ?LaporanKerusakan
     {
-        return $this->laporanSheet ? LaporanKerusakan::with('item.jenis', 'item.usulan', 'foto', 'pelapor')->find($this->laporanSheet) : null;
+        return $this->laporanSheet ? LaporanKerusakan::with('jenis', 'kecamatan', 'desa', 'foto', 'pelapor')->find($this->laporanSheet) : null;
     }
 
 
@@ -134,7 +134,7 @@ new class extends Component
 ?>
 
 @php
-    $hasilL = $hasil ? \App\Models\LaporanKerusakan::with('item.jenis', 'item.usulan', 'foto')->find($hasil) : null;
+    $hasilL = $hasil ? \App\Models\LaporanKerusakan::with('jenis', 'kecamatan', 'desa', 'foto')->find($hasil) : null;
     $no = collect($this->titik)->pluck('no', 'id');
 @endphp
 
@@ -219,9 +219,9 @@ new class extends Component
                 </span>
             </div>
             <div class="flex flex-col gap-1">
-                <span class="judul text-[26px] leading-[27px]">{{ $hasilL->item->jenis->namaPendek() }} diperbaiki</span>
+                <span class="judul text-[26px] leading-[27px]">{{ $hasilL->jenis?->namaPendek() ?? 'Perlengkapan' }} diperbaiki</span>
                 <span class="text-[15px] text-fg-muted">{{ $hasilL->lokasi() }} · {{ $hasilL->nomor }}</span>
-                <span class="flex items-center gap-1.5 font-caption text-[13px] text-success">@svg('lucide-bell', 'size-3.5') Pelapor & pengusul asli dikabari</span>
+                <span class="flex items-center gap-1.5 font-caption text-[13px] text-success">@svg('lucide-bell', 'size-3.5') {{ $hasilL->usulan_item_id ? 'Pelapor & pengusul asli dikabari' : 'Pelapor dikabari' }}</span>
             </div>
             <div class="grid grid-cols-2 gap-2">
                 @foreach ([['Sebelum · pelapor', $sebelum], ['Sesudah · '.$hasilL->selesai_at->format('H.i'), $sesudah]] as [$ket, $f])

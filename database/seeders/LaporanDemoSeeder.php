@@ -4,6 +4,8 @@ namespace Database\Seeders;
 
 use App\Enums\StatusItem as SI;
 use App\Enums\StatusLaporan as SL;
+use App\Models\JenisPerlengkapan;
+use App\Models\Kecamatan;
 use App\Models\LaporanKerusakan;
 use App\Models\User;
 use App\Models\UsulanItem;
@@ -52,9 +54,16 @@ class LaporanDemoSeeder extends Seeder
                 'rusak' => 'Penyok tertabrak truk, sebagian lepas.',
             ][$kerusakan] : null;
             $dibuat = now()->subDays($hari)->subHours(2 + $n);
+            $t = LaporanKerusakan::tempatDari($item);
             $l = LaporanKerusakan::create([
                 'nomor' => sprintf('LPR-%d-%05d', now()->year, LaporanKerusakan::count() + 1),
                 'usulan_item_id' => $item->id,
+                'jenis_perlengkapan_id' => $t['jenis_id'],
+                'lat' => $t['lat'],
+                'lng' => $t['lng'],
+                'alamat' => $t['alamat'],
+                'kecamatan_id' => $t['kecamatan_id'],
+                'desa_id' => $t['desa_id'],
                 'user_id' => $pelapor->id,
                 'kerusakan' => $kerusakan,
                 'catatan' => $catatan,
@@ -80,6 +89,26 @@ class LaporanDemoSeeder extends Seeder
                 $this->salin($l, $hasil[$n % count($hasil)], 'hasil', $selesai);
             }
         }
+
+        // laporan di titik bebas: perlengkapan lama yang tidak tercatat terpasang lewat aplikasi
+        $kec = Kecamatan::with('desa')->first();
+        [$lat, $lng] = config('usuljalan.peta_awal');
+        $l = LaporanKerusakan::create([
+            'nomor' => sprintf('LPR-%d-%05d', now()->year, LaporanKerusakan::count() + 1),
+            'jenis_perlengkapan_id' => JenisPerlengkapan::where('nama', 'like', 'Rambu%')->value('id') ?? JenisPerlengkapan::value('id'),
+            'lat' => $lat + 0.006,
+            'lng' => $lng - 0.004,
+            'alamat' => 'Simpang tiga dekat pasar',
+            'kecamatan_id' => $kec?->id,
+            'desa_id' => $kec?->desa->first()?->id,
+            'user_id' => $warga->id,
+            'kerusakan' => 'hilang',
+            'catatan' => 'Rambu lama di simpang ini sudah tidak ada, tinggal tiangnya.',
+            'status' => SL::Baru,
+        ]);
+        $dibuat = now()->subDays(1);
+        $l->forceFill(['created_at' => $dibuat, 'updated_at' => $dibuat])->saveQuietly();
+        $this->salin($l, $foto[0], 'pelapor', $dibuat);
     }
 
     private function salin(LaporanKerusakan $l, string $sumber, string $jenis, $waktu): void

@@ -32,7 +32,7 @@
             <span class="line-clamp-2 text-base font-semibold leading-[21px]">{{ $l->lokasi() }}</span>
             <div class="flex flex-wrap gap-1.5 pt-0.5">
                 <span class="flex items-center gap-1 rounded-sm bg-surface-muted px-1.5 py-[3px] font-caption text-[13px] font-semibold">
-                    <span class="text-accent">@svg('lucide-'.$l->item->jenis->ikon, 'size-4')</span>{{ $l->item->jenis->namaPendek() }}
+                    <span class="text-accent">@svg('lucide-'.$l->ikon(), 'size-4')</span>{{ $l->jenis?->namaPendek() ?? 'Perlengkapan' }}
                 </span>
                 <span class="flex items-center gap-1 rounded-sm bg-warning-bg px-1.5 py-[3px] font-caption text-[13px] font-semibold text-warning">{{ ucfirst(\App\Models\LaporanKerusakan::KERUSAKAN[$l->kerusakan][1] ?? $l->kerusakan) }}</span>
             </div>

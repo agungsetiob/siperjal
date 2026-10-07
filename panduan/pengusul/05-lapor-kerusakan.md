@@ -1,20 +1,21 @@
 ---
 judul: Melaporkan perlengkapan yang rusak
-ringkas: Rambu atau lampu yang sudah terpasang tapi rusak, mati, atau hilang? Laporkan lewat peta, petugas akan mengecek.
+ringkas: Rambu atau lampu rusak, mati, atau hilang? Tandai lokasinya di peta, petugas akan mengecek.
 peran: Pengusul
 urutan: 5
 layar: [lapor-kerusakan, laporan-saya]
 durasi: 3 menit
 perangkat: HP
-diperbarui: 2026-10-04
+diperbarui: 2026-10-06
 ---
 
-Perlengkapan yang sudah terpasang bisa dilaporkan kalau mati, rusak, hilang, pudar, atau roboh. Dishub lalu menugaskan petugas untuk mengecek ke lokasi. Boleh dengan akun, boleh juga tanpa akun.
+Perlengkapan jalan bisa dilaporkan kalau mati, rusak, hilang, pudar, atau roboh. Dishub lalu menugaskan petugas untuk mengecek ke lokasi. Boleh dengan akun, boleh juga tanpa akun.
 
 ## Sebelum mulai
 
 - Siapkan 1 sampai 3 foto kondisi perlengkapan saat ini.
-- Hanya perlengkapan yang sudah **terpasang** (ada di peta halaman depan) yang bisa dilaporkan.
+- Tanpa akun, yang bisa dilaporkan hanya perlengkapan yang sudah **terpasang** (ada di peta halaman depan).
+- Dengan akun, perlengkapan apa saja bisa dilaporkan, termasuk yang tidak ada di peta: tandai sendiri lokasinya dan pilih jenisnya (lihat langkah 4).
 
 ## 1. Pilih perlengkapan yang rusak (tanpa akun)
 
@@ -78,7 +79,12 @@ Empat langkahnya: **Dilaporkan**, **Dicek petugas**, **Menunggu perbaikan**, lal
 
 ## 4. Lapor lewat akun
 
-Kalau sudah punya akun, ketuk tombol **+**, lalu pilih **Lapor kerusakan**. Ketuk pin perlengkapan yang rusak di peta, ketuk **Lanjut: Isi laporan**, lalu isi seperti langkah 2.
+Kalau sudah punya akun, ketuk tombol **+**, lalu pilih **Lapor kerusakan**. Tunjukkan lokasinya di peta dengan salah satu cara berikut:
+
+- **Ketuk pin perlengkapan** yang sudah terpasang. Jenis dan lokasinya terisi sendiri.
+- **Ketuk peta** di lokasi perlengkapan yang rusak, atau pakai tombol lokasi saya dan cari alamat. Kecamatan dan desa terisi otomatis; kalau tidak terbaca, pilih sendiri. Kalau ada perlengkapan terpasang di dekat titik itu, ia muncul di bawah peta. Ketuk bila itu yang rusak.
+
+Ketuk **Lanjut: Isi laporan**. Kalau lokasinya bukan pin terpasang, pilih dulu jenisnya di **Perlengkapan apa?**, lalu isi seperti langkah 2.
 
 ```gambar
 src: ../gambar/pengusul-lapor-peta.png
@@ -86,7 +92,7 @@ keterangan: Pilih Lapor kerusakan, lalu pilih pin di peta
 penanda:
   - [71.8, 27.8, "Pilih Lapor kerusakan."]
   - [71.8, 74.1, "Ketuk pin perlengkapan yang rusak."]
-  - [88.5, 93.7, "Aktif setelah perlengkapan dipilih."]
+  - [88.5, 93.7, "Aktif setelah lokasi ditandai."]
 ```
 
 ```gambar

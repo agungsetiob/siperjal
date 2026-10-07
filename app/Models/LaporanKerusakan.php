@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Laporan kerusakan perlengkapan yang sudah terpasang (pemeliharaan).
+ * Laporan kerusakan perlengkapan jalan (pemeliharaan). Titik & jenis disimpan di laporan sendiri;
+ * bila perlengkapannya tercatat terpasang lewat aplikasi, laporan ikut tertaut ke item usulan (`item`, opsional).
  * Alur: Baru → Ditugaskan (koordinator Dishub) → Menunggu perbaikan (petugas cek lokasi) → Selesai diperbaiki.
  */
 class LaporanKerusakan extends Model
@@ -46,12 +47,29 @@ class LaporanKerusakan extends Model
             'selesai_at' => 'datetime',
             'lat_cek' => 'float',
             'lng_cek' => 'float',
+            'lat' => 'float',
+            'lng' => 'float',
         ];
     }
 
     public function item()
     {
         return $this->belongsTo(UsulanItem::class, 'usulan_item_id');
+    }
+
+    public function jenis()
+    {
+        return $this->belongsTo(JenisPerlengkapan::class, 'jenis_perlengkapan_id');
+    }
+
+    public function kecamatan()
+    {
+        return $this->belongsTo(Kecamatan::class);
+    }
+
+    public function desa()
+    {
+        return $this->belongsTo(Desa::class);
     }
 
     public function pelapor()
@@ -101,6 +119,23 @@ class LaporanKerusakan extends Model
             ->filter(fn ($i) => $i->lat_terpasang ?? $i->usulan->lat)->values();
     }
 
+    /** Perlengkapan terpasang di sekitar titik laporan (ditawarkan agar laporan tertaut), terdekat dulu. */
+    public static function terpasangSekitar(float $lat, float $lng, ?int $radius = null): \Illuminate\Support\Collection
+    {
+        $radius ??= config('usuljalan.radius_lapor', 200);
+        $d = $radius / 111000;
+
+        return UsulanItem::with('jenis', 'usulan', 'laporanTerbuka')
+            ->where('status', \App\Enums\StatusItem::Terpasang)
+            ->where(fn ($q) => $q
+                ->where(fn ($q) => $q->whereBetween('lat_terpasang', [$lat - $d, $lat + $d])->whereBetween('lng_terpasang', [$lng - $d * 1.5, $lng + $d * 1.5]))
+                ->orWhereHas('usulan', fn ($q) => $q->whereBetween('lat', [$lat - $d, $lat + $d])->whereBetween('lng', [$lng - $d * 1.5, $lng + $d * 1.5])))
+            ->get()
+            ->map(fn ($i) => tap($i, fn ($i) => $i->jarak = Usulan::jarak($lat, $lng, (float) ($i->lat_terpasang ?? $i->usulan->lat), (float) ($i->lng_terpasang ?? $i->usulan->lng))))
+            ->filter(fn ($i) => $i->jarak <= $radius)
+            ->sortBy('jarak')->values();
+    }
+
     public static function petugasLapangan(): Collection
     {
         return User::where('role', Role::Dishub)->where('aktif', true)
@@ -130,24 +165,33 @@ class LaporanKerusakan extends Model
 
     public function judul(): string
     {
-        return $this->item->jenis->namaPendek().' '.(self::KERUSAKAN[$this->kerusakan][1] ?? $this->kerusakan);
+        return ($this->jenis?->namaPendek() ?? 'Perlengkapan').' '.(self::KERUSAKAN[$this->kerusakan][1] ?? $this->kerusakan);
+    }
+
+    public function ikon(): string
+    {
+        return $this->jenis?->ikon ?? 'wrench';
     }
 
     public function lokasi(): string
     {
-        $u = $this->item->usulan;
+        return $this->alamat ?: $this->lokasiSingkat();
+    }
 
-        return $u->alamat ?: $u->lokasiSingkat();
+    public function lokasiSingkat(): string
+    {
+        return collect([$this->desa?->nama, $this->kecamatan ? 'Kec. '.$this->kecamatan->nama : null])
+            ->filter()->implode(', ') ?: ($this->alamat ?? '-');
     }
 
     public function lat(): ?float
     {
-        return (float) ($this->item->lat_terpasang ?? $this->item->usulan->lat) ?: null;
+        return $this->lat ?: null;
     }
 
     public function lng(): ?float
     {
-        return (float) ($this->item->lng_terpasang ?? $this->item->usulan->lng) ?: null;
+        return $this->lng ?: null;
     }
 
     public function fotoJenis(string $jenis): Collection
@@ -198,24 +242,52 @@ class LaporanKerusakan extends Model
 
     // ── Aksi ──
 
+    /** Jenis & titik laporan yang tertaut ke perlengkapan terpasang. */
+    public static function tempatDari(UsulanItem $item): array
+    {
+        $u = $item->usulan;
+
+        return [
+            'item' => $item,
+            'jenis_id' => $item->jenis_perlengkapan_id,
+            'lat' => (float) ($item->lat_terpasang ?? $u->lat),
+            'lng' => (float) ($item->lng_terpasang ?? $u->lng),
+            'alamat' => $u->alamat,
+            'kecamatan_id' => $u->kecamatan_id,
+            'desa_id' => $u->desa_id,
+        ];
+    }
+
     /**
-     * Buat laporan. Satu perlengkapan hanya punya satu laporan berjalan: bila sudah ada, laporan itu yang dikembalikan.
+     * Buat laporan. Satu perlengkapan terpasang hanya punya satu laporan berjalan: bila sudah ada, laporan itu yang dikembalikan.
+     *
+     * `$tempat`: item?, jenis_id, lat, lng, alamat, kecamatan_id, desa_id. Bila `item` diisi, jenis & titik diambil dari item.
      *
      * @param  array<int, array{file: \Illuminate\Http\UploadedFile, lat?: ?float, lng?: ?float}>  $foto
      * @param  array{nama_pelapor?: ?string, kontak_email?: ?string}  $publik  pelapor tanpa akun
      */
-    public static function buat(UsulanItem $item, ?User $pelapor, string $kerusakan, ?string $catatan, array $foto, array $publik = []): self
+    public static function buat(array $tempat, ?User $pelapor, string $kerusakan, ?string $catatan, array $foto, array $publik = []): self
     {
-        if ($ada = static::aktif()->where('usulan_item_id', $item->id)->first()) {
-            return $ada;
+        $item = $tempat['item'] ?? null;
+        if ($item) {
+            $tempat = static::tempatDari($item);
+            if ($ada = static::aktif()->where('usulan_item_id', $item->id)->first()) {
+                return $ada;
+            }
         }
-        $laporan = DB::transaction(function () use ($item, $pelapor, $kerusakan, $catatan, $publik) {
+        $laporan = DB::transaction(function () use ($item, $tempat, $pelapor, $kerusakan, $catatan, $publik) {
             $tahun = now()->year;
             $urut = static::where('nomor', 'like', "LPR-{$tahun}-%")->count() + 1;
 
             return static::create([
                 'nomor' => sprintf('LPR-%d-%05d', $tahun, $urut),
-                'usulan_item_id' => $item->id,
+                'usulan_item_id' => $item?->id,
+                'jenis_perlengkapan_id' => $tempat['jenis_id'] ?? null,
+                'lat' => $tempat['lat'] ?? null,
+                'lng' => $tempat['lng'] ?? null,
+                'alamat' => ($tempat['alamat'] ?? null) ?: null,
+                'kecamatan_id' => $tempat['kecamatan_id'] ?? null,
+                'desa_id' => $tempat['desa_id'] ?? null,
                 'user_id' => $pelapor?->id,
                 'nama_pelapor' => $pelapor ? null : (($publik['nama_pelapor'] ?? null) ?: null),
                 'kontak_email' => $pelapor ? null : (($publik['kontak_email'] ?? null) ?: null),
@@ -225,7 +297,7 @@ class LaporanKerusakan extends Model
             ]);
         });
         $laporan->simpanFoto($foto, 'pelapor');
-        $item->usulan->catat("{$item->jenis->namaPendek()} dilaporkan rusak ({$laporan->nomor})", $laporan->kerusakanLabel());
+        $item?->usulan->catat("{$item->jenis->namaPendek()} dilaporkan rusak ({$laporan->nomor})", $laporan->kerusakanLabel());
         $laporan->kabari("Laporan kerusakan baru: {$laporan->judul()}", $laporan->lokasi().' · dari '.$laporan->namaPelapor(), 'kerusakan_baru',
             User::where('role', Role::Dishub)->where('aktif', true)->get(), pelapor: false);
 
@@ -276,15 +348,16 @@ class LaporanKerusakan extends Model
     {
         $this->simpanFoto($foto, 'hasil');
         $this->update(['status' => SL::Selesai, 'selesai_at' => now(), 'catatan_selesai' => $catatan ?: null, 'ditutup_oleh' => auth()->id()]);
-        $this->item->usulan->catat("{$this->item->jenis->namaPendek()} selesai diperbaiki ({$this->nomor})", $catatan ?: null);
+        $this->item?->usulan->catat("{$this->item->jenis->namaPendek()} selesai diperbaiki ({$this->nomor})", $catatan ?: null);
         $hasil = $this->fotoJenis('hasil')->last()?->url();
         $isi = "{$this->judul()} di {$this->lokasi()} sudah diperbaiki. Terima kasih sudah melapor!";
         $this->kabari('Selesai diperbaiki', $isi, 'kerusakan_selesai', ekstra: ['foto' => $hasil]);
-        // pengusul asli perlengkapan ikut dikabari
-        $asal = $this->item->usulan;
-        $pengusul = $asal->instansi_id ? User::where('instansi_id', $asal->instansi_id)->get() : collect([$asal->user]);
-        $this->kabari("Perlengkapan usulan {$asal->nomor} sudah diperbaiki", $isi, 'kerusakan_selesai',
-            $pengusul->reject(fn ($u) => $u->id === $this->user_id), pelapor: false, ekstra: ['foto' => $hasil]);
+        // pengusul asli perlengkapan (bila tertaut) ikut dikabari
+        if ($asal = $this->item?->usulan) {
+            $pengusul = $asal->instansi_id ? User::where('instansi_id', $asal->instansi_id)->get() : collect([$asal->user]);
+            $this->kabari("Perlengkapan usulan {$asal->nomor} sudah diperbaiki", $isi, 'kerusakan_selesai',
+                $pengusul->reject(fn ($u) => $u->id === $this->user_id), pelapor: false, ekstra: ['foto' => $hasil]);
+        }
         if ($this->petugas_id && $this->petugas_id !== auth()->id()) {
             $this->kabari("{$this->judul()} selesai diperbaiki", $this->lokasi(), 'kerusakan_selesai', collect([$this->petugas]), pelapor: false);
         }
@@ -303,7 +376,7 @@ class LaporanKerusakan extends Model
             $f->delete();
         });
         $this->update(['status' => SL::MenungguPerbaikan, 'selesai_at' => null, 'catatan_selesai' => null, 'ditutup_oleh' => null]);
-        $this->item->usulan->riwayat()->where('aksi', 'like', "%selesai diperbaiki ({$this->nomor})")->where('created_at', '>=', now()->subMinutes(10))->delete();
+        $this->item?->usulan->riwayat()->where('aksi', 'like', "%selesai diperbaiki ({$this->nomor})")->where('created_at', '>=', now()->subMinutes(10))->delete();
     }
 
     public function batalkan(): void

@@ -10,8 +10,11 @@ use App\Models\Pengaturan;
 use App\Models\RuasJalan;
 use App\Models\User;
 use App\Models\UsulanItem;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -34,6 +37,24 @@ new #[Layout('layouts.app')] class extends Component
     public array $desaBaru = []; // kecamatan_id => nama
 
     public string $kecamatanBaru = '';
+
+    public int $versi = 0; // dinaikkan saat nilai dikembalikan (gagal/urungkan) agar isian ikut tergambar ulang
+
+    public const STATUS_RUAS = ['primer' => 'Primer', 'sekunder' => 'Sekunder', 'lokal' => 'Lokal', 'lingkungan' => 'Lingkungan'];
+
+    public const KEWENANGAN_RUAS = ['nasional' => 'Nasional', 'provinsi' => 'Provinsi', 'kabupaten' => 'Kabupaten/Kota', 'desa' => 'Desa'];
+
+    /** Nama kolom untuk pesan & riwayat. */
+    private const LABEL = [
+        'nama' => 'nama', 'name' => 'nama', 'deskripsi' => 'keterangan', 'satuan' => 'satuan', 'ikon' => 'ikon', 'warna' => 'warna',
+        'email' => 'email', 'no_hp' => 'no. HP', 'instansi_id' => 'instansi', 'jenis' => 'jenis', 'kecamatan_id' => 'kecamatan',
+        'status' => 'status', 'kewenangan' => 'kewenangan',
+    ];
+
+    public function boot(): void
+    {
+        abort_unless(auth()->user()?->hasRole(Role::Admin), 403);
+    }
 
     public function mount(): void
     {
@@ -93,7 +114,7 @@ new #[Layout('layouts.app')] class extends Component
         $model->update([$kolom => $nilai]);
         LogPengaturan::catat($keterangan);
 
-        $token = 'set:'.Str::random(12);
+        $token = 'set:'.auth()->id().':'.Str::random(12);
         Cache::put($token, [get_class($model), $model->getKey(), $kolom, $lama, $keterangan], now()->addMinutes(10));
         $this->dispatch('toast', pesan: str($keterangan)->before(':')->append(' diperbarui')->toString(), urungkan: $token);
     }
@@ -101,13 +122,55 @@ new #[Layout('layouts.app')] class extends Component
     #[On('urungkan')]
     public function urungkan(string $token): void
     {
-        if (! str_starts_with($token, 'set:') || ! ($d = Cache::pull($token))) {
+        if (! str_starts_with($token, 'set:'.auth()->id().':') || ! ($d = Cache::pull($token))) {
             return;
         }
         [$kelas, $id, $kolom, $lama, $ket] = $d;
         $kelas::find($id)?->update([$kolom => $lama]);
         LogPengaturan::catat('Dibatalkan: '.$ket);
+        $this->versi++;
         $this->dispatch('toast', pesan: 'Perubahan dibatalkan');
+    }
+
+    /**
+     * Ubah satu isian dari tabel: hanya kolom yang ada di `$aturan`, divalidasi dulu.
+     * Gagal → toast galat dan isian kembali ke nilai tersimpan (tidak ada yang berubah).
+     */
+    private function ubahIsian(Model $model, string $kolom, mixed $nilai, array $aturan, string $nama): void
+    {
+        abort_unless(array_key_exists($kolom, $aturan), 422);
+        $nilai = is_string($nilai) ? trim($nilai) : $nilai;
+        $nilai = $nilai === '' ? null : $nilai;
+        $label = self::LABEL[$kolom] ?? $kolom;
+
+        $v = Validator::make([$kolom => $nilai], [$kolom => $aturan[$kolom]], [
+            'required' => ucfirst($label).' tidak boleh kosong.',
+            'unique' => ucfirst($label).' sudah dipakai.',
+            'email' => 'Format email belum benar.',
+            'max' => ucfirst($label).' terlalu panjang (maks. :max huruf).',
+        ]);
+        if ($v->fails()) {
+            $this->versi++;
+            $this->dispatch('toast', pesan: $v->errors()->first(), gagal: true);
+
+            return;
+        }
+        $lama = $model->{$kolom};
+        $tampil = fn ($x) => $x instanceof \BackedEnum ? $x->value : (string) ($x ?? '—');
+        $this->ubah($model, $kolom, $nilai, in_array($kolom, ['nama', 'name', 'satuan', 'email', 'no_hp', 'ikon', 'warna'])
+            ? "{$nama}: {$label} {$tampil($lama)} → {$tampil($nilai)}"
+            : "{$nama}: {$label} diubah");
+    }
+
+    private static function ikonAda(): \Closure
+    {
+        return function ($attr, $nilai, $gagal) {
+            try {
+                svg('lucide-'.$nilai);
+            } catch (\Throwable) {
+                $gagal('Ikon tidak ditemukan di lucide.dev.');
+            }
+        };
     }
 
     // ── Perlengkapan
@@ -122,6 +185,18 @@ new #[Layout('layouts.app')] class extends Component
     {
         $j = JenisPerlengkapan::findOrFail($id);
         $this->ubah($j, 'aktif', ! $j->aktif, $j->namaPendek().($j->aktif ? ' dimatikan dari formulir' : ' diaktifkan di formulir'));
+    }
+
+    public function ubahJenis(int $id, string $kolom, $nilai): void
+    {
+        $j = JenisPerlengkapan::findOrFail($id);
+        $this->ubahIsian($j, $kolom, $nilai, [
+            'nama' => 'required|string|max:100',
+            'deskripsi' => 'nullable|string|max:150',
+            'satuan' => 'required|string|max:20',
+            'ikon' => ['required', 'string', 'max:50', self::ikonAda()],
+            'warna' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+        ], $j->namaPendek());
     }
 
     public function salinSsh(): void
@@ -141,7 +216,19 @@ new #[Layout('layouts.app')] class extends Component
     {
         $u = User::findOrFail($id);
         abort_if($u->id === auth()->id(), 422);
-        $this->ubah($u, 'role', Role::from($role), "Peran {$u->name}: {$u->role->label()} → ".Role::from($role)->label());
+        abort_unless($baru = Role::tryFrom($role), 422);
+        $this->ubah($u, 'role', $baru, "Peran {$u->name}: {$u->role->label()} → ".$baru->label());
+    }
+
+    public function ubahPengguna(int $id, string $kolom, $nilai): void
+    {
+        $u = User::findOrFail($id);
+        $this->ubahIsian($u, $kolom, $nilai, [
+            'name' => 'required|string|max:100',
+            'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($u->id)],
+            'no_hp' => 'nullable|string|max:20',
+            'instansi_id' => 'nullable|exists:instansi,id',
+        ], "Pengguna {$u->name}");
     }
 
     public function togglePengguna(int $id): void
@@ -153,9 +240,12 @@ new #[Layout('layouts.app')] class extends Component
 
     public function ubahInstansi(int $id, string $kolom, $nilai): void
     {
-        abort_unless(in_array($kolom, ['nama', 'jenis', 'kecamatan_id']), 422);
         $i = Instansi::findOrFail($id);
-        $this->ubah($i, $kolom, $nilai ?: null, "Instansi {$i->nama}: {$kolom} diubah");
+        $this->ubahIsian($i, $kolom, $nilai, [
+            'nama' => 'required|string|max:150',
+            'jenis' => 'required|in:'.implode(',', array_keys(Instansi::JENIS)),
+            'kecamatan_id' => 'nullable|exists:kecamatan,id',
+        ], "Instansi {$i->nama}");
     }
 
     // ── Wilayah & jalan
@@ -167,10 +257,23 @@ new #[Layout('layouts.app')] class extends Component
         $this->reset('kecamatanBaru');
     }
 
+    public function ubahKecamatan(int $id, $nilai): void
+    {
+        $k = Kecamatan::findOrFail($id);
+        $this->ubahIsian($k, 'nama', $nilai, ['nama' => 'required|string|max:100'], "Kecamatan {$k->nama}");
+    }
+
+    public function ubahDesa(int $id, $nilai): void
+    {
+        $d = Desa::findOrFail($id);
+        $this->ubahIsian($d, 'nama', $nilai, ['nama' => 'required|string|max:100'], "Desa {$d->nama}");
+    }
+
     public function tambahDesa(int $kecamatanId): void
     {
         $nama = trim($this->desaBaru[$kecamatanId] ?? '');
-        if ($nama === '') {
+        Kecamatan::findOrFail($kecamatanId);
+        if ($nama === '' || mb_strlen($nama) > 100) {
             return;
         }
         Desa::create(['kecamatan_id' => $kecamatanId, 'nama' => $nama]);
@@ -188,9 +291,12 @@ new #[Layout('layouts.app')] class extends Component
 
     public function ubahRuas(int $id, string $kolom, $nilai): void
     {
-        abort_unless(in_array($kolom, ['nama', 'status', 'kewenangan']), 422);
         $r = RuasJalan::findOrFail($id);
-        $this->ubah($r, $kolom, $nilai ?: null, "Ruas {$r->nama}: {$kolom} diubah");
+        $this->ubahIsian($r, $kolom, $nilai, [
+            'nama' => 'required|string|max:150',
+            'status' => 'nullable|in:'.implode(',', array_keys(self::STATUS_RUAS)),
+            'kewenangan' => 'nullable|in:'.implode(',', array_keys(self::KEWENANGAN_RUAS)),
+        ], "Ruas {$r->nama}");
     }
 
     // ── Dialog tambah
@@ -211,8 +317,8 @@ new #[Layout('layouts.app')] class extends Component
         $aturan = match ($this->dialog) {
             'pengguna' => ['form.name' => 'required|max:100', 'form.email' => 'required|email|unique:users,email', 'form.no_hp' => 'nullable|max:20', 'form.role' => 'required|in:pengusul,dishub,bappeda,admin', 'form.instansi_id' => 'nullable|exists:instansi,id'],
             'instansi' => ['form.nama' => 'required|max:150', 'form.jenis' => 'required|in:'.implode(',', array_keys(Instansi::JENIS)), 'form.kecamatan_id' => 'nullable|exists:kecamatan,id'],
-            'jenis' => ['form.nama' => 'required|max:100', 'form.deskripsi' => 'nullable|max:150', 'form.ikon' => 'required|max:50', 'form.satuan' => 'required|max:20', 'form.harga_satuan' => 'required|integer|min:0', 'form.warna' => 'required|max:9'],
-            'ruas' => ['form.nama' => 'required|max:150', 'form.status' => 'nullable', 'form.kewenangan' => 'nullable'],
+            'jenis' => ['form.nama' => 'required|max:100', 'form.deskripsi' => 'nullable|max:150', 'form.ikon' => ['required', 'max:50', self::ikonAda()], 'form.satuan' => 'required|max:20', 'form.harga_satuan' => 'required|integer|min:0', 'form.warna' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/']],
+            'ruas' => ['form.nama' => 'required|max:150', 'form.status' => 'nullable|in:'.implode(',', array_keys(self::STATUS_RUAS)), 'form.kewenangan' => 'nullable|in:'.implode(',', array_keys(self::KEWENANGAN_RUAS))],
         };
         $data = array_map(fn ($v) => $v === '' ? null : $v, $this->validate($aturan)['form']);
 
@@ -249,6 +355,8 @@ new #[Layout('layouts.app')] class extends Component
     $terakhir = $this->riwayat->first()?->created_at;
     $sel = 'rounded-sm bg-bg px-2.5 py-2 font-caption text-sm outline outline-1 -outline-offset-1 outline-line focus:outline-2 focus:outline-accent';
     $th = 'font-caption text-xs font-semibold uppercase tracking-[0.3px] text-fg-muted';
+    // isian tabel yang bisa langsung diubah (tersimpan saat keluar dari kolom / Enter)
+    $isi = 'rounded-sm bg-transparent px-2 py-1.5 outline-none hover:bg-surface-muted focus:bg-bg focus:outline-2 focus:outline-accent';
     $toggle = fn ($on) => '<span class="flex h-6 w-10 items-center rounded-full p-[3px] transition '.($on ? 'justify-end bg-accent' : 'bg-[#D4D8E4]').'"><span class="size-[18px] rounded-full bg-bg shadow-sm"></span></span>';
 @endphp
 
@@ -301,15 +409,37 @@ new #[Layout('layouts.app')] class extends Component
                             <span class="flex-1">Jenis</span><span class="w-[110px]">Satuan</span><span class="w-[200px]">Harga satuan {{ $tahunSsh }}</span><span class="w-[90px]">Dipakai</span><span class="w-[60px]">Aktif</span>
                         </div>
                         @foreach ($this->jenis as $j)
-                            <div class="group flex items-center gap-5 border-b border-line bg-bg px-5 py-3.5 last:border-b-0 focus-within:bg-accent-soft" wire:key="j-{{ $j->id }}">
-                                <div class="flex min-w-0 flex-1 items-center gap-3.5">
-                                    <span @class(['grid size-10 shrink-0 place-items-center rounded-sm group-focus-within:bg-bg', 'bg-accent-soft text-accent' => $j->aktif, 'bg-surface-muted text-fg-muted' => ! $j->aktif])>@svg('lucide-'.$j->ikon, 'size-5')</span>
-                                    <div class="flex min-w-0 flex-col gap-0.5">
-                                        <span @class(['truncate text-[15px] font-semibold', 'text-fg-muted' => ! $j->aktif])>{{ $j->nama }}</span>
-                                        <span class="truncate font-caption text-[13px] text-fg-muted">{{ $j->aktif ? ($j->deskripsi ?: '—') : 'Tidak muncul di formulir' }}</span>
+                            <div class="group flex items-center gap-5 border-b border-line bg-bg px-5 py-3 last:border-b-0 focus-within:bg-accent-soft" wire:key="j-{{ $j->id }}-{{ $versi }}">
+                                <div class="flex min-w-0 flex-1 items-center gap-2.5">
+                                    {{-- Ikon & warna pin: ketuk untuk mengubah --}}
+                                    <div class="shrink-0" x-data="{ buka: false }">
+                                        <button type="button" @click="buka = true" @class(['relative grid size-10 place-items-center rounded-sm hover:outline hover:outline-1 hover:outline-accent group-focus-within:bg-bg', 'bg-accent-soft text-accent' => $j->aktif, 'bg-surface-muted text-fg-muted' => ! $j->aktif]) title="Ubah ikon & warna" aria-label="Ubah ikon & warna {{ $j->nama }}">
+                                            @svg('lucide-'.$j->ikon, 'size-5')
+                                            <span class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-bg" style="background: {{ $j->warna }}"></span>
+                                        </button>
+                                        @teleport('body')
+                                            <div x-show="buka" x-cloak class="fixed inset-0 z-[3000] flex items-end justify-center bg-fg/50 sm:items-center" @click.self="buka = false" @keydown.escape.window="buka = false">
+                                                <div class="flex w-full flex-col gap-4 rounded-t-xl bg-bg p-6 sm:max-w-sm sm:rounded-md">
+                                                    <h3 class="judul text-2xl">Ikon & warna · {{ $j->namaPendek() }}</h3>
+                                                    <label class="flex flex-col gap-1.5">
+                                                        <span class="text-sm font-semibold">Ikon (nama dari lucide.dev)</span>
+                                                        <input value="{{ $j->ikon }}" @change="$wire.ubahJenis({{ $j->id }}, 'ikon', $event.target.value)" @keydown.enter="$el.blur()" class="input">
+                                                    </label>
+                                                    <label class="flex flex-col gap-1.5">
+                                                        <span class="text-sm font-semibold">Warna pin</span>
+                                                        <input type="color" value="{{ $j->warna }}" @change="$wire.ubahJenis({{ $j->id }}, 'warna', $event.target.value)" class="input h-11 p-1">
+                                                    </label>
+                                                    <div class="flex justify-end pt-1"><x-tombol @click="buka = false">Selesai</x-tombol></div>
+                                                </div>
+                                            </div>
+                                        @endteleport
+                                    </div>
+                                    <div class="flex min-w-0 flex-1 flex-col">
+                                        <input value="{{ $j->nama }}" @change="$wire.ubahJenis({{ $j->id }}, 'nama', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Nama" @class([$isi, 'w-full text-[15px] font-semibold', 'text-fg-muted' => ! $j->aktif])>
+                                        <input value="{{ $j->deskripsi }}" @change="$wire.ubahJenis({{ $j->id }}, 'deskripsi', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Keterangan singkat" placeholder="{{ $j->aktif ? 'Tambah keterangan singkat' : 'Tidak muncul di formulir' }}" class="{{ $isi }} w-full py-1 font-caption text-[13px] text-fg-muted placeholder:text-fg-muted/70">
                                     </div>
                                 </div>
-                                <span class="w-[110px] font-caption text-sm">{{ $j->satuan }}</span>
+                                <input value="{{ $j->satuan }}" @change="$wire.ubahJenis({{ $j->id }}, 'satuan', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Satuan" class="{{ $isi }} w-[110px] font-caption text-sm">
                                 <label class="flex w-[200px] items-center gap-1.5 rounded-sm bg-bg px-3 py-[9px] font-caption text-sm outline outline-1 -outline-offset-1 outline-line focus-within:outline-2 focus-within:outline-accent"
                                        x-data="{ v: '{{ number_format($j->harga_satuan, 0, ',', '.') }}' }">
                                     <span class="text-fg-muted">Rp</span>
@@ -324,7 +454,7 @@ new #[Layout('layouts.app')] class extends Component
                         @endforeach
                     </div>
                 </div>
-                <div class="flex items-center gap-2 font-caption text-[13px] text-fg-muted">@svg('lucide-info', 'size-4') Jenis yang dimatikan tidak muncul di formulir Ajukan, tetapi usulan lama tetap tersimpan.</div>
+                <div class="flex items-center gap-2 font-caption text-[13px] text-fg-muted">@svg('lucide-info', 'size-4') Ketuk nama, keterangan, satuan, atau ikon untuk mengubahnya. Jenis yang dimatikan tidak muncul di formulir Ajukan, tetapi usulan lama tetap tersimpan.</div>
             @endif
 
             {{-- ── Pengguna ── --}}
@@ -336,25 +466,31 @@ new #[Layout('layouts.app')] class extends Component
                         </div>
                         @foreach ($this->pengguna as $p)
                             @php $saya = $p->id === auth()->id(); @endphp
-                            <div class="flex items-center gap-5 border-b border-line bg-bg px-5 py-3.5 last:border-b-0" wire:key="u-{{ $p->id }}">
-                                <div class="flex min-w-0 flex-1 items-center gap-3">
-                                    <span class="grid size-9 shrink-0 place-items-center rounded-full bg-accent-deep font-caption text-[13px] font-semibold text-fg-inverse">{{ str($p->name)->explode(' ')->take(2)->map(fn ($k) => $k[0])->implode('') }}</span>
-                                    <div class="flex min-w-0 flex-col">
-                                        <span @class(['truncate text-[15px] font-semibold', 'text-fg-muted' => ! $p->aktif])>{{ $p->name }}{{ $saya ? ' (Anda)' : '' }}</span>
-                                        <span class="truncate font-caption text-[13px] text-fg-muted">{{ $p->email }}</span>
+                            <div class="flex items-center gap-5 border-b border-line bg-bg px-5 py-3 last:border-b-0 focus-within:bg-accent-soft" wire:key="u-{{ $p->id }}-{{ $versi }}">
+                                <div class="flex min-w-0 flex-1 items-center gap-2.5">
+                                    <span class="grid size-9 shrink-0 place-items-center rounded-full bg-accent-deep font-caption text-[13px] font-semibold text-fg-inverse">{{ str($p->name)->explode(' ')->filter()->take(2)->map(fn ($k) => mb_substr($k, 0, 1))->implode('') }}</span>
+                                    <div class="flex min-w-0 flex-1 flex-col">
+                                        <span class="flex items-center">
+                                            <input value="{{ $p->name }}" @change="$wire.ubahPengguna({{ $p->id }}, 'name', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Nama" @class([$isi, 'min-w-0 flex-1 text-[15px] font-semibold', 'text-fg-muted' => ! $p->aktif])>
+                                            @if ($saya) <span class="shrink-0 font-caption text-xs text-fg-muted">(Anda)</span> @endif
+                                        </span>
+                                        <input type="email" value="{{ $p->email }}" @change="$wire.ubahPengguna({{ $p->id }}, 'email', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Email" class="{{ $isi }} w-full py-1 font-caption text-[13px] text-fg-muted">
                                     </div>
                                 </div>
                                 <select @disabled($saya) wire:change="ubahPeran({{ $p->id }}, $event.target.value)" class="w-[150px] {{ $sel }}">
                                     @foreach (Role::cases() as $r) <option value="{{ $r->value }}" @selected($p->role === $r)>{{ $r->label() }}</option> @endforeach
                                 </select>
-                                <span class="w-[180px] truncate font-caption text-sm text-fg-muted">{{ $p->instansi?->nama ?? ($p->isPengusul() ? 'Masyarakat' : '—') }}</span>
-                                <span class="w-[130px] font-caption text-sm">{{ $p->no_hp ?: '—' }}</span>
+                                <select wire:change="ubahPengguna({{ $p->id }}, 'instansi_id', $event.target.value)" aria-label="Instansi" class="w-[180px] {{ $sel }}">
+                                    <option value="">{{ $p->isPengusul() ? 'Masyarakat' : '—' }}</option>
+                                    @foreach ($semuaInstansi as $si) <option value="{{ $si->id }}" @selected($p->instansi_id === $si->id)>{{ $si->nama }}</option> @endforeach
+                                </select>
+                                <input type="tel" value="{{ $p->no_hp }}" @change="$wire.ubahPengguna({{ $p->id }}, 'no_hp', $event.target.value)" @keydown.enter="$el.blur()" aria-label="No. HP" placeholder="—" class="{{ $isi }} w-[130px] font-caption text-sm">
                                 <button @disabled($saya) wire:click="togglePengguna({{ $p->id }})" class="w-[60px] disabled:opacity-40" aria-label="Aktif">{!! $toggle($p->aktif) !!}</button>
                             </div>
                         @endforeach
                     </div>
                 </div>
-                <div class="flex items-center gap-2 font-caption text-[13px] text-fg-muted">@svg('lucide-info', 'size-4') Pengguna masuk dengan kode ke email, jadi tidak ada password yang perlu diatur. Warga bisa mendaftar sendiri.</div>
+                <div class="flex items-center gap-2 font-caption text-[13px] text-fg-muted">@svg('lucide-info', 'size-4') Ketuk nama, email, atau no. HP untuk mengubahnya. Pengguna masuk dengan kode ke email, jadi tidak ada password yang perlu diatur. Warga bisa mendaftar sendiri.</div>
             @endif
 
             {{-- ── Instansi ── --}}
@@ -365,8 +501,8 @@ new #[Layout('layouts.app')] class extends Component
                             <span class="flex-1">Nama instansi</span><span class="w-[170px]">Jenis</span><span class="w-[170px]">Kecamatan</span><span class="w-[70px]">Akun</span>
                         </div>
                         @forelse ($this->instansi as $i)
-                            <div class="flex items-center gap-5 border-b border-line bg-bg px-5 py-3 last:border-b-0" wire:key="i-{{ $i->id }}">
-                                <input value="{{ $i->nama }}" @change="$wire.ubahInstansi({{ $i->id }}, 'nama', $event.target.value)" class="min-w-0 flex-1 rounded-sm bg-transparent px-2 py-2 text-[15px] font-semibold outline-none hover:bg-surface-muted focus:bg-bg focus:outline-2 focus:outline-accent">
+                            <div class="flex items-center gap-5 border-b border-line bg-bg px-5 py-3 last:border-b-0" wire:key="i-{{ $i->id }}-{{ $versi }}">
+                                <input value="{{ $i->nama }}" @change="$wire.ubahInstansi({{ $i->id }}, 'nama', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Nama instansi" class="min-w-0 flex-1 rounded-sm bg-transparent px-2 py-2 text-[15px] font-semibold outline-none hover:bg-surface-muted focus:bg-bg focus:outline-2 focus:outline-accent">
                                 <select wire:change="ubahInstansi({{ $i->id }}, 'jenis', $event.target.value)" class="w-[170px] {{ $sel }}">
                                     @foreach (Instansi::JENIS as $v => $l) <option value="{{ $v }}" @selected($i->jenis === $v)>{{ $l }}</option> @endforeach
                                 </select>
@@ -390,23 +526,27 @@ new #[Layout('layouts.app')] class extends Component
                         <h2 class="judul text-[26px]">Kecamatan & desa</h2>
                         <div class="flex flex-col divide-y divide-line rounded-md outline outline-1 -outline-offset-1 outline-line">
                             @foreach ($semuaKecamatan as $k)
-                                <details class="group px-5 py-3.5" wire:key="k-{{ $k->id }}">
-                                    <summary class="flex cursor-pointer list-none items-center gap-3">
-                                        <span class="flex-1 text-[15px] font-semibold">{{ $k->nama }}</span>
-                                        <span class="font-caption text-[13px] text-fg-muted">{{ $k->desa->count() }} desa</span>
-                                        <span class="text-fg-muted transition group-open:rotate-180">@svg('lucide-chevron-down', 'size-4')</span>
-                                    </summary>
-                                    <div class="mt-3 flex flex-wrap gap-1.5">
+                                <div class="px-5 py-2.5" wire:key="k-{{ $k->id }}-{{ $versi }}" x-data="{ buka: false }">
+                                    <div class="flex items-center gap-2">
+                                        <input value="{{ $k->nama }}" @change="$wire.ubahKecamatan({{ $k->id }}, $event.target.value)" @keydown.enter="$el.blur()" aria-label="Nama kecamatan" class="{{ $isi }} min-w-0 flex-1 text-[15px] font-semibold">
+                                        <button type="button" @click="buka = !buka" class="flex shrink-0 items-center gap-2 rounded-sm px-2 py-1.5 font-caption text-[13px] text-fg-muted hover:bg-surface-muted" :aria-expanded="buka">
+                                            {{ $k->desa->count() }} desa <span class="transition" :class="buka && 'rotate-180'">@svg('lucide-chevron-down', 'size-4')</span>
+                                        </button>
+                                    </div>
+                                    <div x-show="buka" x-cloak class="mt-2 flex flex-wrap gap-1.5 pb-1">
                                         @foreach ($k->desa as $d)
-                                            <span class="flex items-center gap-1 rounded-full bg-surface-muted py-1 pl-3 pr-1.5 font-caption text-[13px]">{{ $d->nama }}
-                                                <button wire:click="hapusDesa({{ $d->id }})" wire:confirm="Hapus desa {{ $d->nama }}?" class="grid size-5 place-items-center rounded-full text-fg-muted hover:bg-line">@svg('lucide-x', 'size-3')</button>
+                                            <span class="flex items-center gap-0.5 rounded-full bg-surface-muted py-0.5 pl-1 pr-1.5 font-caption text-[13px] focus-within:bg-bg focus-within:outline focus-within:outline-2 focus-within:outline-accent" wire:key="d-{{ $d->id }}">
+                                                <input value="{{ $d->nama }}" @change="$wire.ubahDesa({{ $d->id }}, $event.target.value)" @keydown.enter="$el.blur()" @keydown.escape="$el.value = @js($d->nama); $el.blur()" aria-label="Nama desa"
+                                                       x-init="$el.style.width = ($el.value.length + 2) + 'ch'" @input="$el.style.width = ($el.value.length + 2) + 'ch'"
+                                                       class="min-w-[4ch] rounded-full bg-transparent px-2 py-0.5 outline-none" title="Ketuk untuk mengubah nama">
+                                                <button wire:click="hapusDesa({{ $d->id }})" wire:confirm="Hapus desa {{ $d->nama }}?" class="grid size-5 place-items-center rounded-full text-fg-muted hover:bg-line" aria-label="Hapus desa {{ $d->nama }}">@svg('lucide-x', 'size-3')</button>
                                             </span>
                                         @endforeach
                                         <form wire:submit="tambahDesa({{ $k->id }})" class="flex">
                                             <input wire:model="desaBaru.{{ $k->id }}" class="w-36 rounded-full bg-bg px-3 py-1 font-caption text-[13px] outline outline-1 -outline-offset-1 outline-line focus:outline-accent" placeholder="+ Tambah desa">
                                         </form>
                                     </div>
-                                </details>
+                                </div>
                             @endforeach
                             <form wire:submit="tambahKecamatan" class="flex gap-2 px-5 py-3.5">
                                 <input wire:model="kecamatanBaru" class="flex-1 {{ $sel }}" placeholder="Nama kecamatan baru">
@@ -421,13 +561,13 @@ new #[Layout('layouts.app')] class extends Component
                         </div>
                         <div class="flex flex-col divide-y divide-line rounded-md outline outline-1 -outline-offset-1 outline-line">
                             @forelse ($ruas as $r)
-                                <div class="flex flex-wrap items-center gap-3 px-5 py-3" wire:key="r-{{ $r->id }}">
-                                    <input value="{{ $r->nama }}" @change="$wire.ubahRuas({{ $r->id }}, 'nama', $event.target.value)" class="min-w-40 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-[15px] font-semibold outline-none hover:bg-surface-muted focus:outline-2 focus:outline-accent">
+                                <div class="flex flex-wrap items-center gap-3 px-5 py-3" wire:key="r-{{ $r->id }}-{{ $versi }}">
+                                    <input value="{{ $r->nama }}" @change="$wire.ubahRuas({{ $r->id }}, 'nama', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Nama ruas" class="min-w-40 flex-1 rounded-sm bg-transparent px-2 py-1.5 text-[15px] font-semibold outline-none hover:bg-surface-muted focus:outline-2 focus:outline-accent">
                                     <select wire:change="ubahRuas({{ $r->id }}, 'status', $event.target.value)" class="{{ $sel }}">
-                                        <option value="">Status…</option>@foreach (['primer' => 'Primer', 'sekunder' => 'Sekunder', 'lokal' => 'Lokal', 'lingkungan' => 'Lingkungan'] as $v => $l)<option value="{{ $v }}" @selected($r->status === $v)>{{ $l }}</option>@endforeach
+                                        <option value="">Status…</option>@foreach ($this::STATUS_RUAS as $v => $l)<option value="{{ $v }}" @selected($r->status === $v)>{{ $l }}</option>@endforeach
                                     </select>
                                     <select wire:change="ubahRuas({{ $r->id }}, 'kewenangan', $event.target.value)" class="{{ $sel }}">
-                                        @foreach (['nasional' => 'Nasional', 'provinsi' => 'Provinsi', 'kabupaten' => 'Kabupaten/Kota', 'desa' => 'Desa'] as $v => $l)<option value="{{ $v }}" @selected($r->kewenangan === $v)>{{ $l }}</option>@endforeach
+                                        @foreach ($this::KEWENANGAN_RUAS as $v => $l)<option value="{{ $v }}" @selected($r->kewenangan === $v)>{{ $l }}</option>@endforeach
                                     </select>
                                 </div>
                             @empty
@@ -488,7 +628,7 @@ new #[Layout('layouts.app')] class extends Component
                         'pengguna' => [['name', 'Nama', 'text'], ['email', 'Email', 'email'], ['no_hp', 'No. HP', 'tel'], ['role', 'Peran', collect(Role::cases())->mapWithKeys(fn ($r) => [$r->value => $r->label()])->all()], ['instansi_id', 'Instansi (khusus pengusul instansi)', ['' => '— Masyarakat / tidak ada —'] + $semuaInstansi->pluck('nama', 'id')->all()]],
                         'instansi' => [['nama', 'Nama instansi', 'text'], ['jenis', 'Jenis', Instansi::JENIS], ['kecamatan_id', 'Kecamatan', ['' => '—'] + $semuaKecamatan->pluck('nama', 'id')->all()]],
                         'jenis' => [['nama', 'Nama', 'text'], ['deskripsi', 'Keterangan singkat', 'text'], ['satuan', 'Satuan', 'text'], ['harga_satuan', 'Harga satuan (Rp)', 'number'], ['ikon', 'Ikon (nama dari lucide.dev)', 'text'], ['warna', 'Warna pin', 'color']],
-                        'ruas' => [['nama', 'Nama ruas', 'text'], ['status', 'Status', ['' => '—', 'primer' => 'Primer', 'sekunder' => 'Sekunder', 'lokal' => 'Lokal', 'lingkungan' => 'Lingkungan']], ['kewenangan', 'Kewenangan', ['nasional' => 'Nasional', 'provinsi' => 'Provinsi', 'kabupaten' => 'Kabupaten/Kota', 'desa' => 'Desa']]],
+                        'ruas' => [['nama', 'Nama ruas', 'text'], ['status', 'Status', ['' => '—'] + $this::STATUS_RUAS], ['kewenangan', 'Kewenangan', $this::KEWENANGAN_RUAS]],
                     };
                 @endphp
                 @foreach ($isian as [$k, $label, $tipe])

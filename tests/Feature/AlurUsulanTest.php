@@ -94,6 +94,50 @@ class AlurUsulanTest extends TestCase
         $this->assertSame(StatusUsulan::Disetujui, $u->fresh()->status);
     }
 
+    public function test_wilayah_dicocokkan_dari_nama_peta(): void
+    {
+        $batulicin = \App\Models\Kecamatan::where('nama', 'Batulicin')->value('id');
+        $kersik = \App\Models\Desa::where('nama', 'Kersik Putih')->value('id');
+
+        $this->assertSame([$batulicin, null], \App\Support\Wilayah::cocokkan('Kecamatan Batulicin', null));
+        $this->assertSame([$batulicin, $kersik], \App\Support\Wilayah::cocokkan(['Kota Batulicin', 'Kec. Batulicin'], ['Desa Kersik Putih']));
+        // Kecamatan tidak terbaca: diambil dari desanya; salah ketik kecil tetap cocok
+        $this->assertSame([$batulicin, $kersik], \App\Support\Wilayah::cocokkan([], 'Kersik Puti'));
+        $this->assertSame([null, null], \App\Support\Wilayah::cocokkan('Antah Berantah', 'Entah'));
+    }
+
+    public function test_kecamatan_desa_otomatis_dari_peta_dan_manual_hanya_bila_gagal(): void
+    {
+        Storage::fake('public');
+        $this->actingAs($this->user('warga@usuljalan.test'));
+
+        Livewire::test('pages::usulan.form')
+            ->call('aturLokasi', -3.4492, 116.0018, ['jalan' => 'Jl. Raya', 'kecamatan' => ['Kecamatan Batulicin'], 'desa' => ['Kersik Putih']])
+            ->assertSet('kecamatanManual', false)->assertSet('desaManual', false)
+            ->assertSee('Kersik Putih')
+            ->assertDontSeeHtml('wire:model.live="kecamatan_id"')->assertDontSeeHtml('wire:model.live="desa_id"')
+            ->call('aturLokasi', -3.5, 116.1, ['kecamatan' => ['Antah'], 'desa' => []])
+            ->assertSet('kecamatan_id', null)
+            ->assertSeeHtml('wire:model.live="kecamatan_id"')
+            ->assertSee('Kecamatan tidak terbaca dari peta, pilih sendiri.');
+    }
+
+    public function test_admin_hanya_melihat_usulan(): void
+    {
+        Notification::fake();
+        $u = $this->ajukan();
+        $this->actingAs($this->user('admin@usuljalan.test'));
+
+        $this->get(route('usulan', $u))->assertOk()->assertSee($u->nomor);
+        $this->get(route('usulan.baru'))->assertRedirect();
+        $detail = fn () => Livewire::test('usulan.detail', ['usulanId' => $u->id]);
+        $detail()->assertDontSee('Minta Revisi')->assertDontSee('Simpan & Berikutnya')
+            ->set('kriteriaDishub', ['sekolah'])->call('simpanPeriksa')->assertForbidden();
+        $detail()->call('simpanBappeda')->assertForbidden();
+        $detail()->call('mulaiUbah')->assertForbidden();
+        $this->assertSame(StatusUsulan::Diperiksa, $u->fresh()->status);
+    }
+
     public function test_skor_nol_tidak_bisa_meloloskan_item(): void
     {
         Notification::fake();
@@ -168,6 +212,77 @@ class AlurUsulanTest extends TestCase
     public function test_pengaturan_hanya_untuk_admin(): void
     {
         $this->actingAs($this->user('dishub@usuljalan.test'))->get(route('pengaturan'))->assertForbidden();
+    }
+
+    public function test_admin_ubah_semua_nama_di_pengaturan_dan_bisa_diurungkan(): void
+    {
+        $this->actingAs($this->user('admin@usuljalan.test'));
+        $kec = \App\Models\Kecamatan::whereHas('desa')->firstOrFail();
+        $desa = $kec->desa()->firstOrFail();
+        $jenis = \App\Models\JenisPerlengkapan::firstOrFail();
+        $warga = $this->user('warga@usuljalan.test');
+        $instansi = \App\Models\Instansi::firstOrFail();
+        $token = fn ($c) => collect($c->effects['dispatches'] ?? [])->where('name', 'toast')->last()['params']['urungkan'] ?? null;
+
+        $c = Livewire::test('pages::pengaturan');
+        $c->call('ubahKecamatan', $kec->id, '  Kecamatan Baru ');
+        $this->assertSame('Kecamatan Baru', $kec->fresh()->nama);
+        $c->call('urungkan', $token($c));
+        $this->assertSame($kec->nama, $kec->fresh()->nama);
+
+        $c->call('ubahDesa', $desa->id, 'Desa Baru');
+        $this->assertSame('Desa Baru', $desa->fresh()->nama);
+
+        foreach (['nama' => 'Lampu Jalan LED', 'deskripsi' => 'Tiang 7 m', 'satuan' => 'titik', 'ikon' => 'lamp', 'warna' => '#112233'] as $kolom => $nilai) {
+            $c->call('ubahJenis', $jenis->id, $kolom, $nilai);
+            $this->assertSame($nilai, $jenis->fresh()->{$kolom});
+        }
+
+        $c->call('ubahPengguna', $warga->id, 'name', 'Warga Baru')
+            ->call('ubahPengguna', $warga->id, 'no_hp', '0812000111')
+            ->call('ubahPengguna', $warga->id, 'instansi_id', (string) $instansi->id)
+            ->call('ubahPengguna', $warga->id, 'email', 'baru@contoh.id');
+        $warga->refresh();
+        $this->assertSame(['Warga Baru', '0812000111', $instansi->id, 'baru@contoh.id'], [$warga->name, $warga->no_hp, $warga->instansi_id, $warga->email]);
+        $c->call('ubahPengguna', $warga->id, 'instansi_id', '');
+        $this->assertNull($warga->fresh()->instansi_id);
+
+        $c->call('ubahInstansi', $instansi->id, 'nama', 'Pemdes Baru');
+        $this->assertSame('Pemdes Baru', $instansi->fresh()->nama);
+    }
+
+    public function test_isian_pengaturan_tidak_valid_ditolak_tanpa_mengubah_data(): void
+    {
+        $this->actingAs($this->user('admin@usuljalan.test'));
+        $kec = \App\Models\Kecamatan::firstOrFail();
+        $jenis = \App\Models\JenisPerlengkapan::firstOrFail();
+        $instansi = \App\Models\Instansi::firstOrFail();
+        $warga = $this->user('warga@usuljalan.test');
+        $pesan = fn ($c) => collect($c->effects['dispatches'] ?? [])->where('name', 'toast')->last()['params'];
+
+        $c = Livewire::test('pages::pengaturan');
+        $c->call('ubahKecamatan', $kec->id, '   ');
+        $this->assertSame(['pesan' => 'Nama tidak boleh kosong.', 'gagal' => true], $pesan($c));
+        $this->assertSame($kec->nama, $kec->fresh()->nama);
+        $c->assertSet('versi', 1);
+
+        $c->call('ubahInstansi', $instansi->id, 'nama', '');
+        $this->assertSame($instansi->nama, $instansi->fresh()->nama);
+
+        $c->call('ubahPengguna', $warga->id, 'email', 'dishub@usuljalan.test');
+        $this->assertSame('Email sudah dipakai.', $pesan($c)['pesan']);
+        $this->assertSame('warga@usuljalan.test', $warga->fresh()->email);
+
+        $c->call('ubahJenis', $jenis->id, 'ikon', 'bukan-ikon-sungguhan');
+        $c->call('ubahJenis', $jenis->id, 'warna', 'merah');
+        $this->assertSame([$jenis->ikon, $jenis->warna], [$jenis->fresh()->ikon, $jenis->fresh()->warna]);
+
+        Livewire::test('pages::pengaturan')->call('ubahJenis', $jenis->id, 'harga_satuan', '1')->assertStatus(422);
+        Livewire::test('pages::pengaturan')->call('ubahPeran', $warga->id, 'raja')->assertStatus(422);
+
+        // bukan admin tidak bisa memanggil aksi pengaturan
+        $this->actingAs($this->user('dishub@usuljalan.test'));
+        Livewire::test('pages::pengaturan')->assertForbidden();
     }
 
     public function test_dishub_lapangan_tandai_terpasang_dan_urungkan(): void

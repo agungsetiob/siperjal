@@ -9,6 +9,7 @@ use App\Models\Usulan;
 use App\Models\UsulanFoto;
 use App\Notifications\UsulanBerubah;
 use App\Support\Panduan;
+use App\Support\Wilayah;
 use App\Models\User;
 use App\Enums\Role;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -30,6 +31,10 @@ new #[Layout('layouts.app')] class extends Component
     public int $langkah = 1;
     public bool $terkirim = false;
 
+    /** Dibuka dari "Ajukan" (bukan melanjutkan draft/revisi): pilihan Usulan baru / Lapor kerusakan tetap tampil. */
+    #[Locked]
+    public bool $baru = false;
+
     /** Durasi panduan "Mengajukan usulan" untuk tautan "Pertama kali?"; null bila pengguna sudah pernah mengirim usulan. */
     #[Locked]
     public ?string $panduanDurasi = null;
@@ -49,6 +54,9 @@ new #[Layout('layouts.app')] class extends Component
     public string $alamat = '';
     public ?int $kecamatan_id = null;
     public ?int $desa_id = null;
+    /** Pilih manual hanya bila tidak terbaca dari peta (per kolom). */
+    public bool $kecamatanManual = false;
+    public bool $desaManual = false;
 
     // ② Kebutuhan
     public array $pilihan = []; // jenis_id => jumlah
@@ -74,6 +82,8 @@ new #[Layout('layouts.app')] class extends Component
             abort_unless($this->milikSaya($usulan) && in_array($usulan->status, [StatusUsulan::Draft, StatusUsulan::Revisi]), 403);
             $this->usulanId = $usulan->id;
             $this->fill($usulan->only(['lat', 'lng', 'kecamatan_id', 'desa_id', 'proposal_otomatis']));
+            $this->kecamatanManual = ! $this->kecamatan_id;
+            $this->desaManual = ! $this->desa_id;
             $this->alamat = $usulan->alamat ?? '';
             $this->keterangan = $usulan->keterangan ?? '';
             $this->penanggung_jawab = $usulan->penanggung_jawab ?? $user->name;
@@ -85,6 +95,7 @@ new #[Layout('layouts.app')] class extends Component
                 $this->fotoLama = $usulan->foto->filter(fn ($f) => ! $diminta || $f->created_at <= $diminta)->pluck('id')->all();
             }
         } else {
+            $this->baru = true;
             $this->penanggung_jawab = $user->name;
             $this->proposal_otomatis = ! $user->instansi_id;
             if (! Usulan::where('user_id', $user->id)->where('status', '!=', StatusUsulan::Draft)->exists()) {
@@ -144,6 +155,7 @@ new #[Layout('layouts.app')] class extends Component
         }
         if ($prop === 'kecamatan_id') {
             $this->desa_id = null;
+            $this->desaManual = true;
         }
         $this->simpan();
     }
@@ -178,10 +190,9 @@ new #[Layout('layouts.app')] class extends Component
         $this->lng = round($lng, 7);
         $this->alamat = $alamat['jalan'] ?? $this->alamat;
 
-        if ($kec = Kecamatan::where('nama', 'like', trim($alamat['kecamatan'] ?? '-'))->first()) {
-            $this->kecamatan_id = $kec->id;
-            $this->desa_id = Desa::where('kecamatan_id', $kec->id)->where('nama', 'like', trim($alamat['desa'] ?? '-'))->value('id');
-        }
+        [$this->kecamatan_id, $this->desa_id] = Wilayah::cocokkan($alamat['kecamatan'] ?? null, $alamat['desa'] ?? null);
+        $this->kecamatanManual = ! $this->kecamatan_id;
+        $this->desaManual = ! $this->desa_id;
         $this->simpan();
         $this->dispatch('lokasi-diatur', lat: $this->lat, lng: $this->lng);
     }
@@ -255,7 +266,7 @@ new #[Layout('layouts.app')] class extends Component
                 $this->addError('lokasi', 'Tandai lokasi di peta dulu.');
             }
             if (! $this->kecamatan_id) {
-                $this->addError('kecamatan_id', 'Pilih kecamatan.');
+                $this->addError('kecamatan_id', 'Kecamatan tidak terbaca dari peta. Pilih kecamatan.');
             }
         }
         if ($n === 2 && ! $this->pilihan) {
@@ -540,6 +551,9 @@ new #[Layout('layouts.app')] class extends Component
             @if ($revisi)
                 <div class="flex items-end justify-between"><h1 class="judul text-[30px] leading-[30px]">Perbaiki lokasi</h1>{!! $tagPerbaiki('map-pin') !!}</div>
             @else
+            @if ($baru)
+                <x-pilih-ajukan aktif="usulan" />
+            @endif
             <div class="flex flex-col gap-1">
                 <h1 class="judul text-[34px] leading-9">Foto & lokasi</h1>
                 <p class="text-sm text-fg-muted">Foto jalannya, lokasi terisi sendiri.</p>
@@ -614,24 +628,42 @@ new #[Layout('layouts.app')] class extends Component
                             <span class="flex items-center gap-1 font-caption text-[10px] font-semibold uppercase tracking-[0.6px] text-accent">@svg('lucide-sparkles', 'size-3') Terisi otomatis{{ $u?->foto->whereNotNull('lat')->isNotEmpty() ? ' dari foto' : '' }}</span>
                             <input wire:model.live.blur="alamat" class="w-full bg-transparent text-[15px] font-semibold outline-none placeholder:font-normal placeholder:text-fg-muted" placeholder="Tulis nama jalan / patokan">
                         </div>
+                        {{-- Kecamatan → Desa → Koordinat; terisi dari peta, dropdown hanya bila tidak terbaca --}}
                         <div class="grid grid-cols-3 gap-2">
-                            <label class="flex flex-col gap-0.5 rounded-sm bg-surface-muted px-2 py-1.5">
-                                <span class="font-caption text-[10px] text-fg-muted">Desa</span>
-                                <select wire:model.live="desa_id" class="-ml-1 bg-transparent text-xs font-semibold outline-none">
-                                    <option value="">Pilih…</option>@foreach ($desa as $d)<option value="{{ $d->id }}">{{ $d->nama }}</option>@endforeach
-                                </select>
-                            </label>
-                            <label class="flex flex-col gap-0.5 rounded-sm bg-surface-muted px-2 py-1.5">
-                                <span class="font-caption text-[10px] text-fg-muted">Kecamatan</span>
-                                <select wire:model.live="kecamatan_id" class="-ml-1 bg-transparent text-xs font-semibold outline-none">
-                                    <option value="">Pilih…</option>@foreach ($kecamatan as $k)<option value="{{ $k->id }}">{{ $k->nama }}</option>@endforeach
-                                </select>
-                            </label>
+                            @if ($kecamatanManual)
+                                <label class="flex flex-col gap-0.5 rounded-sm bg-surface-muted px-2 py-1.5 outline outline-1 -outline-offset-1 outline-warning">
+                                    <span class="font-caption text-[10px] text-fg-muted">Kecamatan</span>
+                                    <select wire:model.live="kecamatan_id" class="-ml-1 bg-transparent text-xs font-semibold outline-none">
+                                        <option value="">Pilih…</option>@foreach ($kecamatan as $k)<option value="{{ $k->id }}">{{ $k->nama }}</option>@endforeach
+                                    </select>
+                                </label>
+                            @else
+                                <div class="flex flex-col gap-0.5 rounded-sm bg-surface-muted px-2 py-1.5">
+                                    <span class="font-caption text-[10px] text-fg-muted">Kecamatan</span>
+                                    <span class="truncate text-xs font-semibold">{{ $kecamatan->firstWhere('id', $kecamatan_id)?->nama }}</span>
+                                </div>
+                            @endif
+                            @if ($desaManual)
+                                <label class="flex flex-col gap-0.5 rounded-sm bg-surface-muted px-2 py-1.5 outline outline-1 -outline-offset-1 outline-warning">
+                                    <span class="font-caption text-[10px] text-fg-muted">Desa</span>
+                                    <select wire:model.live="desa_id" @disabled(! $kecamatan_id) class="-ml-1 bg-transparent text-xs font-semibold outline-none disabled:text-fg-muted">
+                                        <option value="">{{ $kecamatan_id ? 'Pilih…' : 'Pilih kecamatan dulu' }}</option>@foreach ($desa as $d)<option value="{{ $d->id }}">{{ $d->nama }}</option>@endforeach
+                                    </select>
+                                </label>
+                            @else
+                                <div class="flex flex-col gap-0.5 rounded-sm bg-surface-muted px-2 py-1.5">
+                                    <span class="font-caption text-[10px] text-fg-muted">Desa</span>
+                                    <span class="truncate text-xs font-semibold">{{ $desa->firstWhere('id', $desa_id)?->nama }}</span>
+                                </div>
+                            @endif
                             <div class="flex flex-col gap-0.5 rounded-sm bg-surface-muted px-2 py-1.5">
                                 <span class="font-caption text-[10px] text-fg-muted">Koordinat</span>
                                 <span class="truncate text-xs font-semibold">{{ number_format($lat, 3, '.', '') }}, {{ number_format($lng, 3, '.', '') }}</span>
                             </div>
                         </div>
+                        @if ($kecamatanManual || $desaManual)
+                            <p class="flex items-center gap-1.5 text-xs text-warning">@svg('lucide-info', 'size-3.5 shrink-0') {{ $kecamatanManual ? 'Kecamatan' : 'Desa' }} tidak terbaca dari peta, pilih sendiri.</p>
+                        @endif
                         @error('kecamatan_id') <div class="text-xs text-danger">{{ $message }}</div> @enderror
                     @else
                         <p class="text-[13px] text-fg-muted">Lokasi foto tidak terbaca? Tidak apa-apa — <b class="text-fg">tap peta</b> untuk menaruh pin, atau <button type="button" x-data @click="$dispatch('butuh-lokasi')" class="font-semibold text-accent">cari alamat</button>.</p>
@@ -779,7 +811,7 @@ new #[Layout('layouts.app')] class extends Component
                 <div class="flex min-w-0 flex-1 flex-col gap-[3px]">
                     <span class="font-caption text-[10px] font-semibold uppercase tracking-[0.6px] text-fg-muted">Lokasi · {{ $u?->foto->count() }} foto</span>
                     <span class="text-sm font-semibold">{{ $alamat ?: 'Tanpa nama jalan' }}</span>
-                    <span class="font-caption text-xs text-fg-muted">{{ collect([$u?->desa ? 'Desa '.$u->desa->nama : null, $u?->kecamatan ? 'Kec. '.$u->kecamatan->nama : null])->filter()->implode(' · ') }}</span>
+                    <span class="font-caption text-xs text-fg-muted">{{ collect([$u?->kecamatan ? 'Kec. '.$u->kecamatan->nama : null, $u?->desa ? 'Desa '.$u->desa->nama : null])->filter()->implode(' · ') }}</span>
                 </div>
                 <button wire:click="$set('langkah', 1)" class="font-caption text-[13px] font-semibold text-accent">Ubah</button>
             </div>

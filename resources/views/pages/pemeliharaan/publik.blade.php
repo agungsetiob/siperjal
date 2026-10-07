@@ -33,7 +33,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
     {
         if ($nomor !== null) {
             $this->nomor = strtoupper(trim($nomor));
-            $this->laporan = LaporanKerusakan::with('item.jenis', 'item.usulan.desa', 'item.usulan.kecamatan', 'foto', 'petugas')->where('nomor', $this->nomor)->first();
+            $this->laporan = LaporanKerusakan::with('jenis', 'kecamatan', 'desa', 'item.usulan', 'foto', 'petugas')->where('nomor', $this->nomor)->first();
 
             return null;
         }
@@ -81,7 +81,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
             'email.email' => 'Format email belum benar.',
         ]);
 
-        $laporan = LaporanKerusakan::buat($item, null, $this->kerusakan, trim($this->catatan),
+        $laporan = LaporanKerusakan::buat(['item' => $item], null, $this->kerusakan, trim($this->catatan),
             collect($this->foto)->map(fn ($f, $n) => ['file' => $f] + ($this->fotoKoordinat[$n] ?? []))->all(),
             ['nama_pelapor' => trim($this->nama), 'kontak_email' => trim($this->email)],
         );
@@ -106,8 +106,13 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
 
 @php
     $l = $laporan;
-    $it = $l?->item ?? $item;
+    $it = $l ? $l->item : $item;
     $u = $it?->usulan;
+    // perlengkapan yang dilaporkan: dari laporan (bisa tanpa item terpasang) atau dari item yang hendak dilaporkan
+    $jenisL = $l ? $l->jenis : $item?->jenis;
+    $ikonL = $jenisL?->ikon ?? 'wrench';
+    [$latL, $lngL] = $l ? [$l->lat(), $l->lng()] : [(float) ($it?->lat_terpasang ?? $u?->lat), (float) ($it?->lng_terpasang ?? $u?->lng)];
+    $lokasiL = $l ? $l->lokasi() : ($u ? ($u->alamat ?: $u->lokasiSingkat()) : null);
     $terbuka = $item?->laporanTerbuka;
     $linkStatus = $l ? route('lapor.status', $l->nomor) : null;
     $penjelasan = $l ? match ($l->status) {
@@ -124,14 +129,14 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
     {{-- Kepala HP --}}
     <div class="sticky top-0 z-[1000] flex h-14 items-center gap-1 border-b border-line bg-bg px-2 lg:hidden">
         <a href="{{ url('/') }}" wire:navigate class="grid size-11 place-items-center" aria-label="Kembali">@svg('lucide-arrow-left', 'size-[22px]')</a>
-        <span class="flex-1 text-base font-semibold">{{ $l || ! $it ? 'Laporan Kerusakan' : 'Laporkan Kerusakan' }}</span>
+        <span class="flex-1 text-base font-semibold">{{ $l || ! $item ? 'Laporan Kerusakan' : 'Laporkan Kerusakan' }}</span>
         @if ($l)
             <button x-data @click="navigator.share ? navigator.share({ title: '{{ $l->nomor }}', url: '{{ $linkStatus }}' }) : (navigator.clipboard.writeText('{{ $linkStatus }}'), $dispatch('toast', { pesan: 'Link disalin' }))" class="grid size-11 place-items-center" aria-label="Bagikan">@svg('lucide-share-2', 'size-5')</button>
         @endif
     </div>
 
     <div class="mx-auto flex max-w-xl flex-col gap-4 px-4 pt-4 lg:pt-0">
-    @if (! $it)
+    @if (! $l && ! $item)
         {{-- Nomor laporan tidak ditemukan --}}
         <div class="flex flex-col gap-4 rounded-md bg-bg p-6">
             <span class="grid size-[72px] place-items-center rounded-full bg-warning-bg text-warning">@svg('lucide-search-x', 'size-8')</span>
@@ -181,13 +186,17 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
 
         {{-- ── Perlengkapan yang dilaporkan ── --}}
         <div class="flex flex-col overflow-hidden rounded-md bg-bg">
-            <div class="h-40" wire:ignore x-data="petaMini({{ (float) ($it->lat_terpasang ?? $u->lat) }}, {{ (float) ($it->lng_terpasang ?? $u->lng) }}, @js(svg('lucide-'.$it->jenis->ikon, 'size-4')->toHtml()))"></div>
+            @if ($latL)
+                <div class="h-40" wire:ignore x-data="petaMini({{ $latL }}, {{ $lngL }}, @js(svg('lucide-'.$ikonL, 'size-4')->toHtml()))"></div>
+            @endif
             <div class="flex items-center gap-3 p-4">
-                <span class="grid size-11 shrink-0 place-items-center rounded-md text-fg-inverse" style="background: {{ $it->jenis->warna }}">@svg('lucide-'.$it->jenis->ikon, 'size-5')</span>
+                <span class="grid size-11 shrink-0 place-items-center rounded-md text-fg-inverse" style="background: {{ $jenisL?->warna ?? '#4556A9' }}">@svg('lucide-'.$ikonL, 'size-5')</span>
                 <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span class="text-base font-semibold">{{ $it->jenis->namaPendek() }}</span>
-                    <span class="text-sm text-fg-muted">{{ $u->alamat ?: $u->lokasiSingkat() }}</span>
-                    <span class="font-caption text-xs text-fg-muted">Dipasang {{ $it->terpasang_at?->translatedFormat('j M Y') }} · usulan <a href="{{ route('lacak', $u->nomor) }}" wire:navigate class="font-semibold text-accent">{{ $u->nomor }}</a></span>
+                    <span class="text-base font-semibold">{{ $jenisL?->namaPendek() ?? 'Perlengkapan' }}</span>
+                    <span class="text-sm text-fg-muted">{{ $lokasiL }}</span>
+                    @if ($it)
+                        <span class="font-caption text-xs text-fg-muted">Dipasang {{ $it->terpasang_at?->translatedFormat('j M Y') }} · usulan <a href="{{ route('lacak', $u->nomor) }}" wire:navigate class="font-semibold text-accent">{{ $u->nomor }}</a></span>
+                    @endif
                 </span>
             </div>
             @if ($l && ($fp = $l->fotoJenis('pelapor'))->isNotEmpty())

@@ -36,11 +36,12 @@ async function alamatDari(lat, lng) {
         const a = (await r.json()).address ?? {};
         return {
             jalan: [a.road, a.neighbourhood, a.hamlet].filter(Boolean).join(', '),
-            desa: a.village ?? a.suburb ?? a.quarter ?? '',
-            kecamatan: (a.city_district ?? a.municipality ?? a.town ?? '').replace(/^Kecamatan\s+/i, ''),
+            // Kandidat nama; server (App\Support\Wilayah) memilih yang cocok dengan data wilayah.
+            desa: [a.village, a.suburb, a.quarter, a.hamlet, a.neighbourhood].filter(Boolean),
+            kecamatan: [a.city_district, a.municipality, a.town, a.suburb, a.city].filter(Boolean),
         };
     } catch {
-        return { jalan: '', desa: '', kecamatan: '' };
+        return { jalan: '', desa: [], kecamatan: [] };
     }
 }
 window.alamatDari = alamatDari;
@@ -634,10 +635,15 @@ document.addEventListener('alpine:init', () => {
         },
     }));
 
-    /** Peta untuk memilih satu titik (pin bisa digeser / tap). */
-    Alpine.data('petaPilih', ({ lat, lng, pusat }) => ({
+    /**
+     * Peta untuk memilih satu titik (pin bisa digeser / tap).
+     * `titik` (opsional, form lapor kerusakan): pin perlengkapan terpasang; ketuk → event `pilih-titik`.
+     */
+    Alpine.data('petaPilih', ({ lat, lng, pusat, titik = [], aktif = null }) => ({
         peta: null,
         pin: null,
+        lapis: null,
+        aktif,
         cari: '',
         hasil: [],
         cariBuka: false,
@@ -645,9 +651,28 @@ document.addEventListener('alpine:init', () => {
             const awal = lat ? [lat, lng] : pusat;
             this.peta = L.map(this.$refs.peta, { zoomControl: false }).setView(awal, lat ? 17 : 13);
             ubin().addTo(this.peta);
+            if (titik.length) {
+                this.lapis = L.featureGroup().addTo(this.peta);
+                this.gambarTitik();
+            }
             if (lat) this.taruh(lat, lng, false);
+            if (this.aktif) this.pin?.setOpacity(0);
             this.peta.on('click', (e) => this.taruh(e.latlng.lat, e.latlng.lng));
             new ResizeObserver(() => this.peta.invalidateSize()).observe(this.$refs.peta);
+        },
+        gambarTitik() {
+            this.lapis.clearLayers();
+            titik.forEach((t) => {
+                const on = t.id === this.aktif;
+                L.marker([t.lat, t.lng], { icon: pinJenis(on ? '#000100' : t.warna, t.ikon, on, on ? 36 : 28), zIndexOffset: on ? 1000 : 0 })
+                    .on('click', () => { this.sorot(t.id); this.$dispatch('pilih-titik', { id: t.id }) })
+                    .addTo(this.lapis);
+            });
+        },
+        sorot(id) {
+            this.aktif = id;
+            if (this.lapis) this.gambarTitik();
+            this.pin?.setOpacity(id ? 0 : 1); // tertaut: pin perlengkapan yang disorot menggantikan pin lokasi
         },
         taruh(la, ln, kirim = true, geser = false) {
             if (!this.pin) {

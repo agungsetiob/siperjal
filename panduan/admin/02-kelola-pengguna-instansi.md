@@ -6,7 +6,7 @@ urutan: 2
 layar: [pengaturan-pengguna]
 durasi: 3 menit
 perangkat: Desktop
-diperbarui: 2026-10-04
+diperbarui: 2026-10-06
 ---
 Warga mendaftar sendiri dengan kode email. Akun petugas dan akun instansi dibuat oleh Admin. Aplikasi tidak memakai kata sandi, jadi tidak ada yang perlu diatur ulang.
 
@@ -26,9 +26,9 @@ penanda:
 > [!NOTE]
 > Petugas lapangan tidak punya peran sendiri. Beri mereka peran **Dishub**, lalu mereka memakai mode lapangan di HP.
 
-## 2. Ubah peran atau nonaktifkan
+## 2. Ubah data, peran, atau nonaktifkan
 
-Di daftar pengguna, kolom **Peran** berupa pilihan yang bisa langsung diganti. Sakelar **Aktif** mematikan akun: pengguna itu tidak bisa masuk dan melihat pesan "Akun Anda dinonaktifkan". Gunakan **Cari nama atau email** untuk menemukan pengguna.
+Di daftar pengguna, klik nama, email, atau no. HP untuk mengubahnya langsung, lalu tekan Enter. **Instansi** dipilih dari daftar. Email tidak boleh sama dengan akun lain. Kolom **Peran** juga berupa pilihan yang bisa langsung diganti. Sakelar **Aktif** mematikan akun: pengguna itu tidak bisa masuk dan melihat pesan "Akun Anda dinonaktifkan". Gunakan **Cari nama atau email** untuk menemukan pengguna.
 
 ```gambar
 src: ../gambar/admin-pengguna.png

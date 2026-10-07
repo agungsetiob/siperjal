@@ -72,10 +72,10 @@ new #[Layout('layouts.app')] class extends Component
         return $q->when($this->cari, fn ($q) => $q->where(fn ($w) => $w
             ->where('nomor', 'like', "%{$this->cari}%")
             ->orWhereHas('pelapor', fn ($p) => $p->where('name', 'like', "%{$this->cari}%"))
-            ->orWhereHas('item.usulan', fn ($u) => $u->where('alamat', 'like', "%{$this->cari}%"))
-            ->orWhereHas('item.jenis', fn ($j) => $j->where('nama', 'like', "%{$this->cari}%"))))
-            ->when($this->kecamatan, fn ($q) => $q->whereHas('item.usulan', fn ($u) => $u->where('kecamatan_id', $this->kecamatan)))
-            ->when($this->jenis, fn ($q) => $q->whereHas('item', fn ($i) => $i->where('jenis_perlengkapan_id', $this->jenis)));
+            ->orWhere('alamat', 'like', "%{$this->cari}%")
+            ->orWhereHas('jenis', fn ($j) => $j->where('nama', 'like', "%{$this->cari}%"))))
+            ->when($this->kecamatan, fn ($q) => $q->where('kecamatan_id', $this->kecamatan))
+            ->when($this->jenis, fn ($q) => $q->where('jenis_perlengkapan_id', $this->jenis));
     }
 
     #[Computed]
@@ -90,7 +90,7 @@ new #[Layout('layouts.app')] class extends Component
         $kolom = $this->tab === 'perbaikan' ? 'dicek_at' : 'created_at';
 
         return $this->query()
-            ->with('item.jenis', 'item.usulan.desa', 'item.usulan.kecamatan', 'pelapor', 'petugas', 'foto')
+            ->with('jenis', 'kecamatan', 'desa', 'pelapor', 'petugas', 'foto')
             ->orderBy($kolom, $this->urut === 'baru' || $this->user->isPengusul() ? 'desc' : 'asc')
             ->limit(200)->get();
     }
@@ -111,7 +111,7 @@ new #[Layout('layouts.app')] class extends Component
                 'lng' => $l->lng(),
                 'telat' => $l->status->aktif() && $hari > $batas,
                 'dekat' => false,
-                'ikon' => svg('lucide-'.$l->item->jenis->ikon, 'size-[15px]')->toHtml(),
+                'ikon' => svg('lucide-'.$l->ikon(), 'size-[15px]')->toHtml(),
                 'nomor' => $l->nomor,
                 'lokasi' => $l->judul(),
                 'meta' => $l->lokasi(),
@@ -125,7 +125,7 @@ new #[Layout('layouts.app')] class extends Component
     public function laporan(): ?LaporanKerusakan
     {
         return $this->pilih
-            ? LaporanKerusakan::terlihatOleh($this->user)->with('item.jenis', 'item.usulan.desa', 'item.usulan.kecamatan', 'petugas', 'foto')->find($this->pilih)
+            ? LaporanKerusakan::terlihatOleh($this->user)->with('jenis', 'kecamatan', 'desa', 'item.usulan', 'petugas', 'foto')->find($this->pilih)
             : null;
     }
 
@@ -172,7 +172,7 @@ new #[Layout('layouts.app')] class extends Component
     #[On('urungkan')]
     public function urungkan(string $token): void
     {
-        if (! str_starts_with($token, 'lpr-selesai:') || $this->user->isPengusul()) {
+        if (! str_starts_with($token, 'lpr-selesai:') || ! $this->user->hasRole(Role::Dishub)) {
             return;
         }
         // token: lpr-selesai:{id} (detail desktop) atau lpr-selesai:{id}:hp (panel hasil Tugas Saya)
@@ -214,7 +214,7 @@ new #[Layout('layouts.app')] class extends Component
     $pengusul = $this->user->isPengusul();
     // Dishub/admin: sama dengan Usulan — Peta tanpa laporan terbuka = peta penuh; di HP tab Ditugaskan/Perbaikan = peta lapangan
     $petaPenuh = ! $pengusul && $mode === 'peta' && ! $pilih;
-    $lapanganHp = $petaPenuh && in_array($tab, ['ditugaskan', 'perbaikan']);
+    $lapanganHp = $petaPenuh && in_array($tab, ['ditugaskan', 'perbaikan']) && $this->user->hasRole(\App\Enums\Role::Dishub);
     $batas = config('usuljalan.batas_hari_periksa');
     $adaFilter = $cari || $kecamatan || $jenis;
     $kepala = [

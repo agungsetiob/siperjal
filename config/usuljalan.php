@@ -6,6 +6,7 @@ return [
     'jarak_pasang_maks' => 500,      // meter, GPS pemasangan lebih jauh dari ini → pakai titik usulan
     'maks_foto' => 10,
     'laporan_maks_foto' => 3,       // foto per laporan kerusakan (publik)
+    'radius_lapor' => 200,          // meter, perlengkapan terpasang yang ditawarkan di sekitar titik laporan
     'laporan_per_jam' => 5,         // batas laporan kerusakan per IP per jam
     'batas_hari_periksa' => 7,      // label merah di antrian Dishub
     'peta_awal' => [-3.4489, 116.0022], // Batulicin, Tanah Bumbu (ganti sesuai daerah)
