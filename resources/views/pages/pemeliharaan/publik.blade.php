@@ -300,7 +300,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
                 @error('kirim') <div class="flex items-start gap-2 rounded-sm bg-danger-bg p-3 text-sm text-danger">@svg('lucide-circle-alert', 'mt-px size-4 shrink-0') {{ $message }}</div> @enderror
                 <button type="button" wire:click="kirim" :disabled="mengunggah" wire:loading.attr="disabled" wire:target="kirim"
                         class="flex h-[52px] w-full items-center justify-center gap-2 rounded-sm bg-accent text-base font-semibold text-fg-inverse shadow-sm hover:brightness-110 disabled:opacity-60">
-                    <span wire:loading.remove wire:target="kirim">Kirim Laporan</span><span wire:loading wire:target="kirim">Mengirim…</span> @svg('lucide-send', 'size-[18px]')
+                    <span wire:loading.remove wire:target="kirim">Kirim Laporan</span><span wire:loading wire:target="kirim">Mengirim…</span> @svg('lucide-send', 'size-[18px] rotate-45')
                 </button>
                 <p class="flex items-center gap-2 font-caption text-xs text-fg-muted">@svg('lucide-shield-check', 'size-4 shrink-0') Isi email untuk dikabari perkembangannya. Nama & email tidak ditampilkan di halaman publik.</p>
                 <p class="font-caption text-xs text-fg-muted">Punya akun? <a href="{{ route('masuk') }}" wire:navigate class="font-semibold text-accent">Masuk</a> untuk melihat semua laporan Anda.</p>

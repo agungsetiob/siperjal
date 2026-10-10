@@ -24,7 +24,7 @@
 @php($tanpaBarAtasHp = $layarForm || request()->routeIs('usulan', 'pemeliharaan', 'notifikasi', 'profil'))
 <body @class(['min-h-dvh pb-20 lg:pb-0', 'bg-bg' => $layarForm, 'bg-surface-muted' => ! $layarForm])>
     <header @class(['sticky top-0 z-[1000] border-b border-line bg-bg', 'hidden lg:block' => $tanpaBarAtasHp])>
-        <div class="flex h-16 items-center gap-6 px-4 lg:px-6">
+        <div class="flex h-16 items-center gap-3 px-4 lg:gap-6 lg:px-6">
             <x-logo />
             <nav class="hidden items-center gap-1 lg:flex">
                 @foreach ($menu as [$label, $route, $ikon])
@@ -37,7 +37,8 @@
 
             </nav>
 
-            <div class="ml-auto flex items-center gap-3">
+            <div class="ml-auto flex items-center gap-1.5 sm:gap-3">
+                <x-logo-instansi class="mr-3 hidden xl:flex" />
                 @if ($user->isPengusul())
                     <div class="hidden lg:block"><x-tombol :href="route('lapor')" ikon="plus">Ajukan</x-tombol></div>
                 @endif
@@ -48,7 +49,7 @@
                      @tutup-profil.window="buka = false" @keydown.escape.window="buka = false">
                     <button @click="window.innerWidth < 1024 ? Livewire.navigate('{{ route('profil') }}') : buka = !buka"
                             :class="buka ? 'bg-accent-soft outline outline-1 -outline-offset-1 outline-accent/40' : 'hover:bg-surface-muted'"
-                            class="flex items-center gap-2.5 rounded-sm p-1 pr-2.5" aria-label="Profil saya">
+                            class="flex items-center gap-2.5 rounded-sm p-1 sm:pr-2.5" aria-label="Profil saya">
                         <span class="grid size-9 place-items-center overflow-hidden rounded-full bg-secondary font-caption text-sm font-semibold text-on-secondary">
                             <template x-if="foto"><img :src="foto" class="size-full object-cover" alt=""></template>
                             <span x-show="! foto" x-text="inisial"></span>

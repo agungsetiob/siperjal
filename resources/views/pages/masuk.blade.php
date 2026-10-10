@@ -179,7 +179,7 @@ new #[Layout('layouts.publik', ['nav' => 'masuk', 'footer' => 'tidak'])] #[Title
                             </span>
                         </label>
                         <button class="{{ $tombol }} hidden lg:flex" wire:loading.attr="disabled">
-                            <span wire:loading.remove wire:target="kirimKode">Kirim Kode</span><span wire:loading wire:target="kirimKode">Mengirim…</span> @svg('lucide-send', 'size-[18px]')
+                            <span wire:loading.remove wire:target="kirimKode">Kirim Kode</span><span wire:loading wire:target="kirimKode">Mengirim…</span> @svg('lucide-send', 'size-[18px] rotate-45')
                         </button>
                     </div>
                     @error('email') <span class="-mt-2 text-sm text-danger lg:mt-0">{{ $message }}</span> @enderror
@@ -187,7 +187,7 @@ new #[Layout('layouts.publik', ['nav' => 'masuk', 'footer' => 'tidak'])] #[Title
                     <div class="flex gap-2.5 rounded-md bg-surface-tint p-3 text-sm leading-5 text-accent-deep lg:hidden">@svg('lucide-building-2', 'size-[18px] shrink-0') Akun instansi dibuat oleh Dishub. Hubungi admin jika belum punya.</div>
                     <div class="{{ $bawah }} lg:hidden">
                         <button class="{{ $tombol }}" wire:loading.attr="disabled">
-                            <span wire:loading.remove wire:target="kirimKode">Kirim Kode</span><span wire:loading wire:target="kirimKode">Mengirim…</span> @svg('lucide-send', 'size-[18px]')
+                            <span wire:loading.remove wire:target="kirimKode">Kirim Kode</span><span wire:loading wire:target="kirimKode">Mengirim…</span> @svg('lucide-send', 'size-[18px] rotate-45')
                         </button>
                     </div>
                 </form>

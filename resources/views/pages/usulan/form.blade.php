@@ -870,7 +870,7 @@ new #[Layout('layouts.app')] class extends Component
             @if ($langkah === 3 || $revisi)
                 <span class="flex items-center justify-center gap-1.5 text-center font-caption text-[11px] text-fg-muted">@svg('lucide-history', 'size-3') {{ $revisi ? 'Dishub akan memeriksa ulang · kami kabari lewat email' : 'Status bisa dipantau di menu Lacak Usulan' }}</span>
                 <button wire:click="kirim" wire:loading.attr="disabled" wire:target="kirim" class="flex items-center justify-center gap-2 rounded-sm bg-accent px-5 py-3.5 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110 disabled:opacity-60">
-                    <span wire:loading.remove wire:target="kirim">{{ $revisi ? 'Kirim Ulang' : 'Kirim Usulan' }}</span><span wire:loading wire:target="kirim">Mengirim…</span> @svg('lucide-send', 'size-[18px]')
+                    <span wire:loading.remove wire:target="kirim">{{ $revisi ? 'Kirim Ulang' : 'Kirim Usulan' }}</span><span wire:loading wire:target="kirim">Mengirim…</span> @svg('lucide-send', 'size-[18px] rotate-45')
                 </button>
             @else
                 <button wire:click="lanjut" class="flex items-center justify-center gap-2 rounded-sm bg-accent px-5 py-3.5 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">

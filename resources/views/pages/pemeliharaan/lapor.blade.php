@@ -523,7 +523,7 @@ new #[Layout('layouts.app')] class extends Component
         @error('kirim') <div class="mt-4 flex items-start gap-2 rounded-sm bg-danger-bg p-3 text-sm text-danger">@svg('lucide-circle-alert', 'mt-px size-4 shrink-0') {{ $message }}</div> @enderror
         <div class="fixed inset-x-0 bottom-0 z-[900] border-t border-line bg-bg px-4 pb-7 pt-3 lg:static lg:mt-6 lg:border-0 lg:p-0">
             <button wire:click="kirim" wire:loading.attr="disabled" wire:target="kirim,foto" class="flex h-[52px] w-full items-center justify-center gap-2 rounded-sm bg-accent text-base font-semibold text-fg-inverse shadow-sm disabled:opacity-60">
-                <span wire:loading.remove wire:target="kirim">Kirim Laporan</span><span wire:loading wire:target="kirim">Mengirim…</span> @svg('lucide-send', 'size-[18px]')
+                <span wire:loading.remove wire:target="kirim">Kirim Laporan</span><span wire:loading wire:target="kirim">Mengirim…</span> @svg('lucide-send', 'size-[18px] rotate-45')
             </button>
         </div>
         </div>

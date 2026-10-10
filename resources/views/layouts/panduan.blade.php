@@ -49,7 +49,10 @@
                 </div>
             </div>
 
-            <a href="{{ $aplikasi }}" class="flex items-center gap-2 rounded-md px-3.5 py-[9px] text-sm font-semibold outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">Buka aplikasi @svg('lucide-arrow-up-right', 'size-4')</a>
+            <div class="flex items-center gap-5">
+                <x-logo-instansi class="hidden xl:flex" />
+                <a href="{{ $aplikasi }}" class="flex items-center gap-2 rounded-md px-3.5 py-[9px] text-sm font-semibold outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">Buka aplikasi @svg('lucide-arrow-up-right', 'size-4')</a>
+            </div>
         </div>
     </header>
 

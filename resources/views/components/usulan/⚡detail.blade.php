@@ -1554,7 +1554,7 @@ new class extends Component
                         Dikirim sebagai {{ $user->name }} · Dishub
                     </span>
                     <button wire:click="$set('dialog', null)" class="rounded-sm bg-bg px-5 py-3 text-[15px] font-semibold outline outline-1 -outline-offset-1 outline-line">Batal</button>
-                    <button wire:click="mintaRevisi" wire:loading.attr="disabled" class="flex items-center gap-2 rounded-sm bg-accent px-5 py-3 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">Kirim Permintaan Revisi @svg('lucide-send', 'size-[18px]')</button>
+                    <button wire:click="mintaRevisi" wire:loading.attr="disabled" class="flex items-center gap-2 rounded-sm bg-accent px-5 py-3 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">Kirim Permintaan Revisi @svg('lucide-send', 'size-[18px] rotate-45')</button>
                 </div>
             </div>
         </div>

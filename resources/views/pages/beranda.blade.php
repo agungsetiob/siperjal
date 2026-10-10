@@ -86,7 +86,12 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
         <div class="absolute inset-x-0 top-0 z-0 h-[300px] lg:inset-0 lg:h-auto" wire:ignore x-data="petaTerpasang(@js($this->dataPeta()), @js(config('usuljalan.peta_awal')))">
             <div x-ref="peta" class="h-full w-full"></div>
         </div>
-        <div class="pointer-events-none absolute inset-x-0 top-0 z-[1] h-[300px] bg-surface-muted/50 lg:inset-0 lg:h-auto lg:bg-accent/[.08] lg:[background-image:linear-gradient(90deg,#FFFFFFFA_0%,#FFFFFFF0_42%,#FFFFFF00_62%)]"></div>
+        <div class="pointer-events-none absolute inset-x-0 top-0 z-[1] h-[300px] bg-surface-muted/50 lg:hidden"></div>
+        {{-- Desktop: foto jalan menggantikan pudar putih di sisi teks, memudar ke peta di kanan --}}
+        <div class="pointer-events-none absolute inset-0 z-[1] hidden lg:block [mask-image:linear-gradient(90deg,#000_0%,#000_38%,transparent_66%)]">
+            <img src="{{ asset('img/hero-beranda.webp') }}" width="1600" height="900" alt="" fetchpriority="high" decoding="async" class="size-full object-cover object-left">
+            <div class="absolute inset-0 bg-gradient-to-r from-bg/50 via-bg/35 to-bg/20"></div>
+        </div>
 
         {{-- ── HP ── --}}
         @php $akhir = $this->terpasang->first(); @endphp
@@ -115,7 +120,7 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
             <h2 class="judul text-2xl text-fg-inverse">3 langkah mengajukan</h2>
             <div class="grid grid-cols-3 gap-2">
                 @foreach ([['camera', '1. Foto lokasi'], ['grid-2x2', '2. Pilih kebutuhan'], ['send', '3. Kirim']] as [$ikon, $l])
-                    <div class="flex flex-col gap-2 rounded-md bg-bg p-3">@svg('lucide-'.$ikon, 'size-5 text-accent')<span class="text-sm font-semibold leading-[18px]">{{ $l }}</span></div>
+                    <div class="flex flex-col gap-2 rounded-md bg-bg p-3">@svg('lucide-'.$ikon, 'size-5 text-accent'.($ikon === 'send' ? ' rotate-45' : ''))<span class="text-sm font-semibold leading-[18px]">{{ $l }}</span></div>
                 @endforeach
             </div>
         </div>
@@ -124,10 +129,10 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
         <div class="pointer-events-none relative z-[2] mx-auto hidden min-h-[640px] max-w-[1440px] items-center px-4 py-14 sm:px-8 lg:flex lg:h-[840px] lg:px-[100px] lg:py-[72px]">
             <div class="pointer-events-auto flex w-full max-w-[560px] flex-col gap-6">
                 <div class="flex items-center gap-2 font-caption text-sm font-semibold text-accent">
-                    <span class="size-2 rounded-full bg-accent"></span> Layanan publik Dishub & Bappeda
+                    <span class="size-2 rounded-full bg-accent"></span> Layanan publik Dishub
                 </div>
-                <h1 class="judul text-[52px] leading-[1.02] sm:text-[80px] sm:leading-[82px]">Jalan kurang aman? Usulkan perbaikannya.</h1>
-                <p class="text-lg leading-[27px] text-fg-muted">Peta ini menunjukkan rambu, lampu, dan marka yang sudah terpasang. Masih ada titik yang gelap atau rawan? Foto saja, tandai lokasinya, lalu kirim.</p>
+                <h1 class="judul text-[50px] leading-[1] sm:text-[60px] sm:leading-[80px]">kelola perlengkapan jalan. <span class="text-accent">wujudkan keselamatan.</span></h1>
+                <p class="text-lg leading-[27px] font-semibold">Ada perlengkapan jalan yang perlu diperbaiki? Ajukan usulan dan bantu meningkatkan keselamatan berkendara.</p>
                 <a href="{{ route('usulan.baru') }}" wire:navigate class="flex w-fit items-center gap-2 rounded-sm bg-accent px-8 py-5 text-[19px] font-semibold text-fg-inverse shadow-sm transition hover:brightness-110">
                     Ajukan Usulan @svg('lucide-arrow-right', 'size-5')
                 </a>
@@ -167,12 +172,12 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
             <div class="grid items-start gap-4 md:grid-cols-3">
                 @foreach ([
                     ['camera', '01', 'Foto & tandai lokasi', 'Foto titik jalan yang bermasalah. Lokasi terisi otomatis dari HP, dan bisa digeser di peta.'],
-                    ['list-checks', '02', 'Pilih kebutuhan', 'Centang yang dibutuhkan: rambu, lampu PJU, marka, pita getar, guardrail, atau perlengkapan lainnya.'],
-                    ['send', '03', 'Kirim', 'Anda langsung dapat nomor usulan. Dishub memeriksa, Bappeda menyetujui, lalu dipasang.'],
+                    ['list-checks', '02', 'Pilih kebutuhan', 'Centang yang dibutuhkan: rambu, lampu PJU, marka, atau perlengkapan lainnya.'],
+                    ['send', '03', 'Kirim', 'Anda dapat nomor usulan. Dishub memeriksa, Bappeda menyetujui, lalu dipasang.'],
                 ] as [$ikon, $no, $judul, $isi])
                     <div class="flex flex-col gap-5 rounded-md bg-bg p-7 shadow-sm">
                         <div class="flex items-center justify-between">
-                            <span class="grid size-12 place-items-center rounded-sm bg-accent-soft text-accent">@svg('lucide-'.$ikon, 'size-6')</span>
+                            <span class="grid size-12 place-items-center rounded-sm bg-accent-soft text-accent">@svg('lucide-'.$ikon, 'size-6'.($ikon === 'send' ? ' rotate-45' : ''))</span>
                             <span class="judul text-[44px] leading-[44px] text-accent">{{ $no }}</span>
                         </div>
                         <div class="flex flex-col gap-2">
