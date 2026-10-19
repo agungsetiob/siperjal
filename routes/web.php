@@ -12,7 +12,13 @@ Route::livewire('/', 'pages::beranda')->name('beranda');
 Route::livewire('/lacak/{nomor}', 'pages::lacak')->name('lacak');
 // Lapor kerusakan tanpa akun (dari popup peta beranda / halaman lacak) & status laporan
 Route::livewire('/lapor/status/{nomor}', 'pages::pemeliharaan.publik')->name('lapor.status');
-Route::livewire('/lapor/{item}', 'pages::pemeliharaan.publik')->whereNumber('item')->name('lapor.item');
+Route::livewire('/lapor/aset/{item}', 'pages::pemeliharaan.publik')->whereNumber('item')->name('lapor.aset');
+// tautan lama berbasis id item usulan (QR/pesan yang sudah tersebar) → perlengkapan terpasangnya
+Route::get('/lapor/{item}', function (int $item) {
+    $aset = \App\Models\PerlengkapanTerpasang::where('usulan_item_id', $item)->firstOrFail();
+
+    return redirect()->route('lapor.aset', $aset->id, 301);
+})->whereNumber('item')->name('lapor.item');
 Route::livewire('/masuk', 'pages::masuk')->middleware('guest')->name('masuk');
 Route::redirect('/login', '/masuk')->name('login');
 
@@ -40,6 +46,10 @@ Route::middleware(['auth', 'aktif'])->group(function () {
     // Pemeliharaan: laporan kerusakan perlengkapan terpasang
     Route::livewire('/lapor', 'pages::pemeliharaan.lapor')->middleware('role:pengusul')->name('lapor');
     Route::livewire('/pemeliharaan/{laporan?}', 'pages::pemeliharaan.index')->middleware('role:pengusul,dishub,admin')->name('pemeliharaan');
+
+    // Perlengkapan terpasang (termasuk yang terpasang sebelum SIPERJAL): Dishub mengelola, admin melihat
+    Route::livewire('/terpasang', 'pages::terpasang.index')->middleware('role:dishub,admin')->name('terpasang');
+    Route::get('/terpasang/template.xlsx', \App\Http\Controllers\TemplateTerpasangController::class)->middleware('role:dishub')->name('terpasang.template');
 
     Route::get('/panduan/menu', [PanduanController::class, 'menu'])->name('panduan.menu');
     Route::livewire('/notifikasi', 'pages::notifikasi')->name('notifikasi');

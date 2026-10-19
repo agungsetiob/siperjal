@@ -9,6 +9,7 @@ use App\Models\LogPengaturan;
 use App\Models\Pengaturan;
 use App\Models\RuasJalan;
 use App\Models\User;
+use App\Support\PetaConfig;
 use App\Models\UsulanItem;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
@@ -37,6 +38,8 @@ new #[Layout('layouts.app')] class extends Component
     public array $desaBaru = []; // kecamatan_id => nama
 
     public string $kecamatanBaru = '';
+
+    public string $petaKunci = '';
 
     public int $versi = 0; // dinaikkan saat nilai dikembalikan (gagal/urungkan) agar isian ikut tergambar ulang
 
@@ -70,6 +73,7 @@ new #[Layout('layouts.app')] class extends Component
             'instansi' => Instansi::count(),
             'perlengkapan' => JenisPerlengkapan::count(),
             'wilayah' => Kecamatan::count().' kec.',
+            'peta' => PetaConfig::penyedia() === 'google' ? 'Google' : 'OSM',
         ];
     }
 
@@ -209,6 +213,37 @@ new #[Layout('layouts.app')] class extends Component
         Pengaturan::simpan('ssh_persen', $this->persen);
         LogPengaturan::catat("SSH {$tahun} disalin ke SSH ".($tahun + 1)." ({$this->persen}%)");
         $this->dispatch('toast', pesan: 'Harga SSH '.($tahun + 1).' dibuat');
+    }
+
+    // ── Peta
+    public function ubahPeta(string $penyedia): void
+    {
+        abort_unless(array_key_exists($penyedia, PetaConfig::PENYEDIA), 422);
+        if ($penyedia === 'google' && ! PetaConfig::kunci()) {
+            $this->dispatch('toast', pesan: 'Isi kunci API Google Maps dulu.', gagal: true);
+
+            return;
+        }
+        if ($penyedia === PetaConfig::pilihan()) {
+            return;
+        }
+        PetaConfig::simpan($penyedia);
+        LogPengaturan::catat('Peta: dipakai '.PetaConfig::PENYEDIA[$penyedia]);
+        $this->dispatch('toast', pesan: 'Peta memakai '.PetaConfig::PENYEDIA[$penyedia].'. Muat ulang halaman untuk melihatnya.');
+    }
+
+    public function updatedPetaKunci(): void
+    {
+        $kunci = trim($this->petaKunci);
+        $this->petaKunci = '';
+        if ($kunci !== '' && ! preg_match('/^[A-Za-z0-9_\-]{20,80}$/', $kunci)) {
+            $this->dispatch('toast', pesan: 'Format kunci API belum benar.', gagal: true);
+
+            return;
+        }
+        PetaConfig::simpan(PetaConfig::pilihan(), $kunci);
+        LogPengaturan::catat($kunci === '' ? 'Peta: kunci Google Maps dihapus' : 'Peta: kunci Google Maps diperbarui');
+        $this->dispatch('toast', pesan: $kunci === '' ? 'Kunci dihapus; peta memakai OpenStreetMap' : 'Kunci Google Maps tersimpan');
     }
 
     // ── Pengguna & instansi
@@ -351,7 +386,7 @@ new #[Layout('layouts.app')] class extends Component
 ?>
 
 @php
-    $tabs = ['pengguna' => 'Pengguna', 'instansi' => 'Instansi', 'perlengkapan' => 'Perlengkapan', 'wilayah' => 'Wilayah & Jalan'];
+    $tabs = ['pengguna' => 'Pengguna', 'instansi' => 'Instansi', 'perlengkapan' => 'Perlengkapan', 'wilayah' => 'Wilayah & Jalan', 'peta' => 'Peta'];
     $terakhir = $this->riwayat->first()?->created_at;
     $sel = 'rounded-sm bg-bg px-2.5 py-2 font-caption text-sm outline outline-1 -outline-offset-1 outline-line focus:outline-2 focus:outline-accent';
     $th = 'font-caption text-xs font-semibold uppercase tracking-[0.3px] text-fg-muted';
@@ -388,7 +423,7 @@ new #[Layout('layouts.app')] class extends Component
     <div class="mx-auto flex max-w-[1440px] flex-col gap-12 px-4 pb-20 pt-10 sm:px-8 lg:flex-row lg:px-20">
         <div class="flex min-w-0 flex-1 flex-col gap-5">
             {{-- Toolbar --}}
-            @if ($tab !== 'wilayah')
+            @if (! in_array($tab, ['wilayah', 'peta']))
                 <div class="flex items-center gap-3">
                     <label class="flex w-full max-w-[320px] items-center gap-2 rounded-sm px-3 py-2.5 outline outline-1 -outline-offset-1 outline-line focus-within:outline-2 focus-within:outline-accent">
                         @svg('lucide-search', 'size-4 shrink-0 text-fg-muted')
@@ -515,6 +550,50 @@ new #[Layout('layouts.app')] class extends Component
                         @empty
                             <div class="p-10 text-center text-sm text-fg-muted">Belum ada instansi.</div>
                         @endforelse
+                    </div>
+                </div>
+            @endif
+
+            {{-- ── Peta ── --}}
+            @if ($tab === 'peta')
+                @php $kunciSamar = PetaConfig::kunciSamar(); @endphp
+                <div class="flex max-w-[760px] flex-col gap-6">
+                    <div class="flex flex-col gap-1.5">
+                        <h2 class="judul text-[26px]">Penyedia peta</h2>
+                        <span class="text-[15px] text-fg-muted">Dipakai di semua halaman yang menampilkan peta dan untuk mengisi kecamatan & desa dari titik. Perubahan berlaku setelah halaman dimuat ulang.</span>
+                    </div>
+
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        @foreach (PetaConfig::PENYEDIA as $k => $nama)
+                            @php $pakai = PetaConfig::pilihan() === $k; @endphp
+                            <button type="button" wire:click="ubahPeta('{{ $k }}')" aria-pressed="{{ $pakai ? 'true' : 'false' }}" @class(['flex flex-col items-start gap-2 rounded-md p-5 text-left outline -outline-offset-1', 'bg-accent-soft outline-2 outline-accent' => $pakai, 'bg-bg outline-1 outline-line hover:bg-surface-muted' => ! $pakai])>
+                                <span class="flex w-full items-center justify-between gap-2">
+                                    <span class="flex items-center gap-2 text-[17px] font-semibold">@svg($k === 'osm' ? 'lucide-map' : 'lucide-map-pinned', 'size-5 text-accent') {{ $nama }}</span>
+                                    @if ($pakai) <span class="rounded-full bg-accent px-2 py-0.5 font-caption text-xs font-semibold text-fg-inverse">Dipakai</span> @endif
+                                </span>
+                                <span class="text-sm text-fg-muted">
+                                    @if ($k === 'osm')
+                                        Leaflet + OpenStreetMap. Gratis, tanpa kunci dan tanpa kartu kredit.
+                                    @else
+                                        Tampilan Google. Butuh kunci API dan akun Google Cloud dengan billing aktif; gratis hanya sampai kuota bulanan Google, lewat itu ditagih.
+                                    @endif
+                                </span>
+                            </button>
+                        @endforeach
+                    </div>
+
+                    <div class="flex flex-col gap-3 rounded-md p-5 outline outline-1 -outline-offset-1 outline-line">
+                        <label class="flex flex-col gap-1.5" for="kunci-google">
+                            <span class="text-[15px] font-semibold">Kunci API Google Maps</span>
+                            <span class="text-sm text-fg-muted">{{ $kunciSamar ? 'Tersimpan: '.$kunciSamar.'. Isi kolom di bawah untuk menggantinya, kosongkan lalu keluar kolom untuk menghapus.' : 'Belum ada kunci. Tempel kunci lalu keluar dari kolom — tersimpan otomatis.' }}</span>
+                        </label>
+                        <input id="kunci-google" type="password" autocomplete="off" wire:model.live.blur="petaKunci" placeholder="AIza…" class="{{ $sel }}">
+                        <ul class="flex list-disc flex-col gap-1 pl-5 text-sm text-fg-muted">
+                            <li>Aktifkan <b>Maps JavaScript API</b> dan <b>Geocoding API</b> di Google Cloud.</li>
+                            <li>Batasi kunci ke domain aplikasi ini (HTTP referrer) agar tidak disalahgunakan — kunci terlihat di sisi browser.</li>
+                            <li>Pasang budget alert dan batas kuota harian agar tagihan tidak membengkak.</li>
+                            <li>Jika Google gagal dimuat, peta otomatis kembali ke OpenStreetMap.</li>
+                        </ul>
                     </div>
                 </div>
             @endif

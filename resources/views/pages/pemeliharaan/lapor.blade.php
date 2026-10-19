@@ -1,11 +1,10 @@
 <?php
 
-use App\Enums\StatusItem;
 use App\Models\Desa;
 use App\Models\JenisPerlengkapan;
 use App\Models\Kecamatan;
 use App\Models\LaporanKerusakan;
-use App\Models\UsulanItem;
+use App\Models\PerlengkapanTerpasang;
 use App\Support\Wilayah;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -16,7 +15,7 @@ use Livewire\WithFileUploads;
 /**
  * Ajukan (HP & desktop): pilih jenis pengajuan → lapor kerusakan (desain PM2).
  * Titik bebas seperti usulan (tap peta / GPS / cari alamat, kecamatan & desa terisi otomatis) + pilih jenis perlengkapan.
- * Bila perlengkapannya tercatat terpasang (pin di peta / di sekitar titik), laporan bisa ditautkan ke item itu.
+ * Bila perlengkapannya tercatat terpasang (pin di peta / di sekitar titik), laporan bisa ditautkan ke perlengkapan itu (dari usulan maupun yang terpasang sebelum SIPERJAL).
  */
 new #[Layout('layouts.app')] class extends Component
 {
@@ -28,7 +27,7 @@ new #[Layout('layouts.app')] class extends Component
     public int $langkah = 1;
 
     // ① Lokasi
-    public ?int $itemId = null; // perlengkapan terpasang yang ditautkan (opsional)
+    public ?int $asetId = null; // perlengkapan terpasang yang ditautkan (opsional)
     public ?float $lat = null;
     public ?float $lng = null;
     public string $alamat = '';
@@ -47,51 +46,49 @@ new #[Layout('layouts.app')] class extends Component
 
     public function mount(): void
     {
-        if (request()->integer('item')) {
+        if (request()->integer('aset')) {
             $this->pilihan = 'lapor';
-            $this->pilih(request()->integer('item'));
+            $this->pilih(request()->integer('aset'));
         }
     }
 
     #[Computed]
     public function titik(): array
     {
-        return LaporanKerusakan::perlengkapanTerpasang()->map(fn (UsulanItem $i) => [
+        return LaporanKerusakan::perlengkapanTerpasang()->map(fn (PerlengkapanTerpasang $i) => [
             'id' => $i->id,
-            'lat' => (float) ($i->lat_terpasang ?? $i->usulan->lat),
-            'lng' => (float) ($i->lng_terpasang ?? $i->usulan->lng),
+            'lat' => $i->lat,
+            'lng' => $i->lng,
             'warna' => $i->jenis->warna,
             'ikon' => svg('lucide-'.$i->jenis->ikon, 'size-4')->toHtml(),
         ])->all();
     }
 
     #[Computed]
-    public function item(): ?UsulanItem
+    public function aset(): ?PerlengkapanTerpasang
     {
-        return $this->itemId ? UsulanItem::with('jenis', 'usulan.desa', 'usulan.kecamatan', 'laporanTerbuka')->find($this->itemId) : null;
+        return $this->asetId ? PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'usulanItem.usulan', 'laporanTerbuka')->find($this->asetId) : null;
     }
 
     /** Perlengkapan terpasang di sekitar titik yang ditaruh, ditawarkan agar laporan tertaut. */
     #[Computed]
     public function sekitar()
     {
-        return $this->lat && ! $this->itemId ? LaporanKerusakan::terpasangSekitar($this->lat, $this->lng)->take(3) : collect();
+        return $this->lat && ! $this->asetId ? LaporanKerusakan::terpasangSekitar($this->lat, $this->lng)->take(3) : collect();
     }
 
     /** Tautkan ke perlengkapan terpasang: titik, wilayah & jenis ikut item. */
     public function pilih(int $id): void
     {
-        $item = UsulanItem::with('usulan')->findOrFail($id);
-        abort_unless($item->status === StatusItem::Terpasang, 422);
-        $t = LaporanKerusakan::tempatDari($item);
-        $this->itemId = $id;
+        $t = LaporanKerusakan::tempatDari(PerlengkapanTerpasang::findOrFail($id));
+        $this->asetId = $id;
         [$this->lat, $this->lng] = [$t['lat'] ?: null, $t['lng'] ?: null];
         $this->alamat = (string) $t['alamat'];
         [$this->kecamatan_id, $this->desa_id] = [$t['kecamatan_id'], $t['desa_id']];
         $this->kecamatanManual = ! $this->kecamatan_id;
         $this->desaManual = ! $this->desa_id;
         $this->jenisId = $t['jenis_id'];
-        unset($this->item);
+        unset($this->aset);
         $this->resetErrorBag();
         $this->dispatch('lokasi-diatur', lat: $this->lat, lng: $this->lng);
         $this->dispatch('sorot-titik', id: $id);
@@ -100,15 +97,15 @@ new #[Layout('layouts.app')] class extends Component
     /** "Bukan yang ini": laporan di titik bebas, jenis dipilih sendiri. */
     public function lepas(): void
     {
-        $this->itemId = null;
+        $this->asetId = null;
         $this->jenisId = null;
-        unset($this->item);
+        unset($this->aset);
         $this->dispatch('sorot-titik', id: null);
     }
 
     public function aturLokasi(float $lat, float $lng, array $alamat = []): void
     {
-        if ($this->itemId) {
+        if ($this->asetId) {
             $this->lepas();
         }
         $this->lat = round($lat, 7);
@@ -131,12 +128,12 @@ new #[Layout('layouts.app')] class extends Component
     {
         $this->validate([
             'lat' => 'required|numeric',
-            'kecamatan_id' => $this->itemId ? 'nullable' : 'required|exists:kecamatan,id',
+            'kecamatan_id' => $this->asetId ? 'nullable' : 'required|exists:kecamatan,id',
         ], [
             'lat.required' => 'Tandai lokasinya di peta dulu.',
             'kecamatan_id.required' => 'Pilih kecamatannya.',
         ]);
-        abort_if($this->item?->laporanTerbuka, 422);
+        abort_if($this->aset?->laporanTerbuka, 422);
         $this->langkah = 2;
         $this->js('window.scrollTo({ top: 0 })');
     }
@@ -161,8 +158,7 @@ new #[Layout('layouts.app')] class extends Component
     public function kirim(): void
     {
         abort_unless(auth()->user()->isPengusul(), 403);
-        $item = $this->item;
-        abort_if($this->itemId && $item?->status !== StatusItem::Terpasang, 403);
+        $item = $this->aset;
         if ($ada = $item?->laporanTerbuka) {
             $this->addError('kirim', "Perlengkapan ini sudah dilaporkan ({$ada->nomor}) dan sedang ditangani Dishub.");
 
@@ -186,7 +182,7 @@ new #[Layout('layouts.app')] class extends Component
             'foto.max' => 'Maksimal 3 foto.',
         ]);
 
-        $tempat = $item ? ['item' => $item] : [
+        $tempat = $item ? ['aset' => $item] : [
             'jenis_id' => $this->jenisId,
             'lat' => $this->lat,
             'lng' => $this->lng,
@@ -217,7 +213,7 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-@php $it = $this->item; @endphp
+@php $it = $this->aset; @endphp
 
 <div class="mx-auto max-w-2xl px-4 pb-40 pt-3 lg:pt-8">
 @if ($terkirim)
@@ -242,7 +238,7 @@ new #[Layout('layouts.app')] class extends Component
                     <span class="font-caption text-xs font-semibold uppercase tracking-[1px] text-fg-muted">Nomor laporan</span>
                     <span class="judul text-[34px] leading-9">{{ $l->nomor }}</span>
                 </div>
-                <button x-on:click="navigator.clipboard.writeText('{{ $l->nomor }}'); $dispatch('toast', { pesan: 'Nomor disalin' })" class="flex h-11 items-center gap-1.5 rounded-sm bg-bg px-3.5 text-base font-semibold text-accent shadow-sm outline outline-1 -outline-offset-1 outline-line">@svg('lucide-copy', 'size-[18px]') Salin</button>
+                <button x-on:click="salin('{{ $l->nomor }}'); $dispatch('toast', { pesan: 'Nomor disalin' })" class="flex h-11 items-center gap-1.5 rounded-sm bg-bg px-3.5 text-base font-semibold text-accent shadow-sm outline outline-1 -outline-offset-1 outline-line">@svg('lucide-copy', 'size-[18px]') Salin</button>
             </div>
             <span class="h-px bg-fg/10"></span>
             <div class="flex items-center gap-3">
@@ -300,7 +296,7 @@ new #[Layout('layouts.app')] class extends Component
                 <span class="font-caption text-[13px] text-fg-muted">{{ count($this->titik) }} terpasang</span>
             </div>
             <div class="relative -mx-4 mt-2.5 h-[340px] overflow-hidden lg:mx-0 lg:rounded-md lg:outline lg:outline-1 lg:outline-line" wire:ignore
-                 x-data="petaPilih({ lat: @js($lat), lng: @js($lng), pusat: @js(config('usuljalan.peta_awal')), titik: @js($this->titik), aktif: @js($itemId) })"
+                 x-data="petaPilih({ lat: @js($lat), lng: @js($lng), pusat: @js(config('usuljalan.peta_awal')), titik: @js($this->titik), aktif: @js($asetId) })"
                  @pilih-titik="$wire.pilih($event.detail.id)"
                  @sorot-titik.window="sorot($event.detail.id)"
                  @lokasi-diatur.window="taruh($event.detail.lat, $event.detail.lng, false, true)">
@@ -324,13 +320,13 @@ new #[Layout('layouts.app')] class extends Component
                         <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                             <span class="font-caption text-[11px] font-semibold uppercase tracking-[0.6px] text-accent">Perlengkapan terpasang</span>
                             <span class="text-base font-semibold">{{ $it->jenis->namaPendek() }}</span>
-                            <span class="truncate text-sm text-fg-muted">{{ $it->usulan->alamat ?: $it->usulan->lokasiSingkat() }}</span>
+                            <span class="truncate text-sm text-fg-muted">{{ $it->lokasi() }}</span>
                         </span>
                         <button type="button" wire:click="lepas" class="h-11 shrink-0 px-2 text-sm font-semibold text-accent">Bukan yang ini</button>
                     </div>
                     <div class="flex items-center gap-2 rounded-sm bg-success-bg px-2.5 py-2 text-[13px] text-success">
                         @svg('lucide-map-pin-check', 'size-4 shrink-0')
-                        <span>Terpasang {{ $it->terpasang_at?->translatedFormat('j M Y') }} · dari usulan {{ $it->usulan->nomor }}</span>
+                        <span>Terpasang {{ $it->waktuPasang() }} · {{ $it->usulanItem ? 'dari usulan '.$it->usulanItem->usulan->nomor : 'sebelum SIPERJAL' }}</span>
                     </div>
                     @if ($ada = $it->laporanTerbuka)
                         <div class="flex items-start gap-2 rounded-sm bg-warning-bg px-2.5 py-2 text-[13px] text-warning">
@@ -339,8 +335,8 @@ new #[Layout('layouts.app')] class extends Component
                         </div>
                     @endif
                     <dl class="grid grid-cols-3 gap-2 font-caption text-[13px]">
-                        <div><dt class="text-fg-muted">Kecamatan</dt><dd class="font-semibold">{{ $it->usulan->kecamatan?->nama ?? '—' }}</dd></div>
-                        <div><dt class="text-fg-muted">Desa</dt><dd class="font-semibold">{{ $it->usulan->desa?->nama ?? '—' }}</dd></div>
+                        <div><dt class="text-fg-muted">Kecamatan</dt><dd class="font-semibold">{{ $it->kecamatan?->nama ?? '—' }}</dd></div>
+                        <div><dt class="text-fg-muted">Desa</dt><dd class="font-semibold">{{ $it->desa?->nama ?? '—' }}</dd></div>
                         <div><dt class="text-fg-muted">Koordinat</dt><dd class="font-semibold">{{ number_format($lat, 3) }}, {{ number_format($lng, 3) }}</dd></div>
                     </dl>
                 </div>
@@ -397,7 +393,7 @@ new #[Layout('layouts.app')] class extends Component
                                 <span class="grid size-10 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent">@svg('lucide-'.$s->jenis->ikon, 'size-5')</span>
                                 <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                                     <span class="text-[15px] font-semibold">{{ $s->jenis->namaPendek() }}</span>
-                                    <span class="truncate font-caption text-xs text-fg-muted">±{{ round($s->jarak) }} m · terpasang {{ $s->terpasang_at?->translatedFormat('j M Y') }}{{ $s->laporanTerbuka ? ' · sudah dilaporkan' : '' }}</span>
+                                    <span class="truncate font-caption text-xs text-fg-muted">±{{ round($s->jarak) }} m · terpasang {{ $s->waktuPasang() }}{{ $s->laporanTerbuka ? ' · sudah dilaporkan' : '' }}</span>
                                 </span>
                                 @svg('lucide-chevron-right', 'size-5 text-fg-muted')
                             </button>
@@ -428,7 +424,7 @@ new #[Layout('layouts.app')] class extends Component
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="text-base font-semibold">{{ $it ? $it->jenis->namaPendek() : 'Lokasi laporan' }}</span>
                 <span class="truncate text-sm text-fg-muted">{{ collect([$alamat ?: null, $desa->firstWhere('id', $desa_id)?->nama, $kecamatan->firstWhere('id', $kecamatan_id)?->nama ? 'Kec. '.$kecamatan->firstWhere('id', $kecamatan_id)->nama : null])->filter()->implode(', ') }}</span>
-                @if ($it) <span class="font-caption text-xs text-fg-muted">Terpasang dari {{ $it->usulan->nomor }}</span> @endif
+                @if ($it) <span class="font-caption text-xs text-fg-muted">{{ $it->usulanItem ? 'Terpasang dari '.$it->usulanItem->usulan->nomor : 'Terpasang sebelum SIPERJAL' }}</span> @endif
             </span>
             <button wire:click="kembali" class="h-11 px-2 text-base font-semibold text-accent">Ganti</button>
         </div>

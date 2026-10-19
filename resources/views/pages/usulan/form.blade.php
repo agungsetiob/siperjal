@@ -204,6 +204,13 @@ new #[Layout('layouts.app')] class extends Component
             ->reject(fn ($u) => $u->id === $this->usulanId) : collect();
     }
 
+    /** Perlengkapan yang sudah terpasang di sekitar titik (dari usulan atau data lama): info agar tidak mengusulkan dobel. */
+    #[Computed]
+    public function sudahTerpasang()
+    {
+        return $this->lat ? \App\Models\PerlengkapanTerpasang::sekitar($this->lat, $this->lng, config('usuljalan.radius_berdekatan')) : collect();
+    }
+
     // ── Langkah ②
     public function tambah(int $jenisId, int $delta): void
     {
@@ -401,7 +408,7 @@ new #[Layout('layouts.app')] class extends Component
                     <span class="font-caption text-xs font-semibold uppercase tracking-[1px] text-fg-muted">Nomor usulan</span>
                     <span class="judul text-[34px] leading-9">{{ $u->nomor }}</span>
                 </div>
-                <button x-on:click="navigator.clipboard.writeText('{{ $u->nomor }}'); $dispatch('toast', { pesan: 'Nomor disalin' })" class="flex h-11 items-center gap-1.5 rounded-sm bg-bg px-3.5 text-base font-semibold text-accent shadow-sm outline outline-1 -outline-offset-1 outline-line">@svg('lucide-copy', 'size-[18px]') Salin</button>
+                <button x-on:click="salin('{{ $u->nomor }}'); $dispatch('toast', { pesan: 'Nomor disalin' })" class="flex h-11 items-center gap-1.5 rounded-sm bg-bg px-3.5 text-base font-semibold text-accent shadow-sm outline outline-1 -outline-offset-1 outline-line">@svg('lucide-copy', 'size-[18px]') Salin</button>
             </div>
             <span class="h-px bg-fg/10"></span>
             <div class="flex items-center gap-3">
@@ -681,6 +688,15 @@ new #[Layout('layouts.app')] class extends Component
                         <span class="text-xs leading-[17px] text-fg-muted">{{ $b->items->map(fn ($i) => $i->jenis->namaPendek())->implode(', ') }} · diajukan {{ $b->diajukan_at?->translatedFormat('j M') }}. Hanya info — usulanmu tetap bisa dikirim.</span>
                     </div>
                     <a href="{{ route('lacak', $b->nomor) }}" target="_blank" class="font-caption text-xs font-semibold text-warning">Lihat</a>
+                </div>
+            @endif
+            @if ($this->sudahTerpasang->isNotEmpty())
+                <div class="flex gap-2.5 rounded-md bg-surface-muted p-3">
+                    <span class="text-accent">@svg('lucide-map-pin-check', 'size-[18px]')</span>
+                    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span class="text-[13px] font-semibold">Sudah ada {{ $this->sudahTerpasang->count() }} perlengkapan terpasang di dekat sini</span>
+                        <span class="text-xs leading-[17px] text-fg-muted">{{ $this->sudahTerpasang->take(3)->map(fn ($a) => $a->jenis->namaPendek().' ±'.round($a->jarak).' m')->implode(', ') }}. Hanya info — usulanmu tetap bisa dikirim.</span>
+                    </div>
                 </div>
             @endif
         </div>

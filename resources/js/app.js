@@ -1,50 +1,38 @@
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet.markercluster';
-import 'leaflet.markercluster/dist/MarkerCluster.css';
 import exifr from 'exifr';
+import { buatPeta, alamatDari, cariAlamat, jarakMeter } from './peta/index.js';
 
-const WARNA = { netral: '#9ca3af', proses: '#4556a9', perhatian: '#d99a00', bahaya: '#c62828', sukses: '#0b7a52' };
-
-const ubin = () => L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap',
-});
-
-/** Pin bulat berwarna dengan ikon jenis perlengkapan. */
+/** Pin bulat berwarna dengan ikon jenis perlengkapan (deskripsi ikon untuk adaptor peta). */
 const pinJenis = (warna, ikon, besar = false, ukuran = null, kelas = '') => {
     const u = ukuran ?? (besar ? 40 : 34);
-    return L.divIcon({
-        className: '',
+    return {
         html: `<span class="pin-jenis${besar ? ' besar' : ''} ${kelas}" style="background:${warna};width:${u}px;height:${u}px">${ikon}</span>`,
-        iconSize: [u, u],
-        iconAnchor: [u / 2, u / 2],
+        ukuran: [u, u],
+        jangkar: [u / 2, u / 2],
         popupAnchor: [0, -u / 2 - 4],
-    });
+    };
 };
 
-const penanda = (tone, aktif = false) => L.divIcon({
-    className: '',
-    html: `<span style="display:block;width:${aktif ? 22 : 16}px;height:${aktif ? 22 : 16}px;border-radius:9999px;background:${WARNA[tone] ?? WARNA.proses};border:3px solid #fff;box-shadow:0 1px 4px #0005"></span>`,
-    iconSize: aktif ? [22, 22] : [16, 16],
-});
-
-/** Alamat dari koordinat (OpenStreetMap Nominatim). */
-async function alamatDari(lat, lng) {
-    try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=id&lat=${lat}&lon=${lng}`);
-        const a = (await r.json()).address ?? {};
-        return {
-            jalan: [a.road, a.neighbourhood, a.hamlet].filter(Boolean).join(', '),
-            // Kandidat nama; server (App\Support\Wilayah) memilih yang cocok dengan data wilayah.
-            desa: [a.village, a.suburb, a.quarter, a.hamlet, a.neighbourhood].filter(Boolean),
-            kecamatan: [a.city_district, a.municipality, a.town, a.suburb, a.city].filter(Boolean),
-        };
-    } catch {
-        return { jalan: '', desa: [], kecamatan: [] };
-    }
-}
+/** Alamat dari koordinat — penyedia mengikuti Pengaturan → Peta. */
 window.alamatDari = alamatDari;
+
+/** Salin teks ke papan klip. `navigator.clipboard` hanya ada di HTTPS/localhost: di HTTP biasa pakai cadangan execCommand. */
+window.salin = async (teks) => {
+    try {
+        if (navigator.clipboard?.writeText) return await navigator.clipboard.writeText(teks);
+    } catch {
+        // jatuh ke cadangan
+    }
+    const t = Object.assign(document.createElement('textarea'), { value: teks });
+    t.setAttribute('readonly', '');
+    t.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(t);
+    t.select();
+    try {
+        document.execCommand('copy');
+    } finally {
+        t.remove();
+    }
+};
 
 /** Koordinat GPS dari foto (EXIF), null bila tidak ada. */
 window.koordinatFoto = async (file) => {
@@ -55,11 +43,6 @@ window.koordinatFoto = async (file) => {
         return null;
     }
 };
-
-const satelit = () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Citra &copy; Esri',
-});
 
 /**
  * PWA: daftarkan service worker (public/sw.js) & tangkap ajakan pasang dari browser.
@@ -199,89 +182,82 @@ document.addEventListener('alpine:init', () => {
         peta: null,
         penanda: {},
         satelit: false,
-        lapisan: null,
         pilih,
-        init() {
-            this.peta = L.map(this.$refs.peta, { zoomControl: false, attributionControl: true }).setView(pusat, 13);
-            this.lapisan = ubin().addTo(this.peta);
-            const kelompok = L.markerClusterGroup({
-                showCoverageOnHover: false,
-                maxClusterRadius: 44,
-                iconCreateFunction: (c) => L.divIcon({
-                    className: '',
-                    html: `<span class="pin-kelompok"><span>${c.getChildCount()}</span></span>`,
-                    iconSize: [44, 44],
-                }),
-            });
+        async init() {
+            this.peta = await buatPeta(this.$refs.peta, { pusat, zoom: 13, atribusi: true });
+            const kelompok = this.peta.kelompok({ radius: 44, ukuran: 44, html: (n) => `<span class="pin-kelompok"><span>${n}</span></span>` });
+            this.kelompok = kelompok;
             titik.forEach((t) => {
-                const m = L.marker([t.lat, t.lng], { icon: this.ikon(t) });
-                m.bindTooltip(`<div class="flex w-[232px] flex-col gap-1.5 font-sans">
+                const m = this.peta.penanda({
+                    ...this.ikon(t),
+                    lat: t.lat,
+                    lng: t.lng,
+                    dalam: kelompok,
+                    tooltip: {
+                        html: `<div class="flex w-[232px] flex-col gap-1.5 font-sans">
                         <div class="flex items-center justify-between font-caption text-xs"><span class="font-semibold text-accent">${t.nomor}</span><span class="${t.telat ? 'font-semibold text-warning' : 'text-fg-muted'}">${t.umur}</span></div>
                         <span class="text-sm font-semibold text-fg">${t.lokasi}</span>
                         <span class="font-caption text-xs text-fg-muted">${t.meta} · klik untuk buka</span></div>`,
-                    { className: 'tip-uj', direction: 'top', offset: [0, -18] });
-                if (penuh) {
-                    m.bindPopup(t.popup, { className: 'popup-uj popup-foto', closeButton: false, maxWidth: 320, minWidth: 300, autoPanPaddingTopLeft: L.point(470, 90), autoPanPaddingBottomRight: L.point(80, 60) });
-                } else {
-                    m.on('click', () => Livewire.dispatch('pilih-titik', { id: t.id }));
-                }
+                        kelas: 'tip-uj',
+                        offset: [0, -18],
+                    },
+                    ...(penuh
+                        ? { popup: { html: t.popup, kelas: 'popup-uj popup-foto', tutup: false, lebarMaks: 320, lebarMin: 300, autoGeser: { kiriAtas: [470, 90], kananBawah: [80, 60] } } }
+                        : { klik: () => Livewire.dispatch('pilih-titik', { id: t.id }) }),
+                });
                 this.penanda[t.id] = { m, t };
-                kelompok.addLayer(m);
             });
-            this.peta.addLayer(kelompok);
-            this.kelompok = kelompok;
 
+            const semua = titik.map((t) => [t.lat, t.lng]);
             if (titik.length) {
-                this.peta.fitBounds(kelompok.getBounds(), { padding: penuh ? [80, 80] : [50, 50], paddingTopLeft: penuh && window.innerWidth >= 640 ? [480, 60] : [40, 110], maxZoom: 16 });
+                this.peta.fitBounds(semua, { padding: penuh ? [80, 80] : [50, 50], paddingTopLeft: penuh && window.innerWidth >= 640 ? [480, 60] : [40, 110], maxZoom: 16 });
             }
             if (this.pilih) this.sorot(this.pilih, true);
 
             const perbarui = () => {
-                const b = this.peta.getBounds();
-                Alpine.store('peta').ids = titik.filter((t) => b.contains([t.lat, t.lng])).map((t) => t.id);
+                if (!this.peta.siap()) return;
+                Alpine.store('peta').ids = titik.filter((t) => this.peta.dalamBatas([t.lat, t.lng])).map((t) => t.id);
             };
-            this.peta.on('moveend', perbarui);
+            this.peta.pada('geser', perbarui);
             perbarui();
 
             window.addEventListener('pilih-berubah', (e) => this.sorot(e.detail.id, true));
             window.addEventListener('sorot-titik', (e) => this.hover(e.detail.id));
             window.addEventListener('tampilkan-semua', () => {
                 Alpine.store('peta').saring = false;
-                if (titik.length) this.peta.fitBounds(kelompok.getBounds(), { padding: [60, 60], paddingTopLeft: [480, 60], maxZoom: 16 });
+                if (titik.length) this.peta.fitBounds(semua, { padding: [60, 60], paddingTopLeft: [480, 60], maxZoom: 16 });
             });
-            new ResizeObserver(() => this.peta.invalidateSize()).observe(this.$refs.peta);
         },
         ikon(t, terpilih = false) {
             if (terpilih) {
-                return L.divIcon({
-                    className: '',
+                return {
                     html: `<span class="pin-terpilih"><span>${t.ikon}</span></span><span class="pin-label">${t.nomor} · dibuka</span>`,
-                    iconSize: [52, 52],
-                    iconAnchor: [26, 26],
-                });
+                    ukuran: [52, 52],
+                    jangkar: [26, 26],
+                };
             }
             return pinJenis(t.telat || t.dekat ? '#8A5A00' : '#4556A9', t.ikon, false, 32);
         },
         sorot(id, geser = false) {
-            Object.values(this.penanda).forEach(({ m, t }) => m.setIcon(this.ikon(t, t.id === id)));
+            if (!this.peta) return;
+            Object.values(this.penanda).forEach(({ m, t }) => m.ikon(this.ikon(t, t.id === id)));
             const p = this.penanda[id];
             if (p) {
-                p.m.setZIndexOffset(1000);
-                if (geser) this.kelompok.zoomToShowLayer(p.m, () => this.peta.panTo(p.m.getLatLng()));
+                p.m.z(1000);
+                if (geser) this.kelompok.zoomKe(p.m, () => this.peta.panTo(p.m.posisi()));
             }
         },
         hover(id) {
             const p = this.penanda[id];
-            if (!p) return;
-            this.kelompok.zoomToShowLayer(p.m, () => p.m.openTooltip());
+            if (!p || !this.peta) return;
+            this.kelompok.zoomKe(p.m, () => p.m.bukaTooltip());
         },
         lokasiSaya() {
             navigator.geolocation?.getCurrentPosition((p) => this.peta.setView([p.coords.latitude, p.coords.longitude], 16));
         },
         gantiLapisan() {
-            this.peta.removeLayer(this.lapisan);
             this.satelit = !this.satelit;
-            this.lapisan = (this.satelit ? satelit() : ubin()).addTo(this.peta);
+            this.peta.gantiLapisan(this.satelit);
             this.$refs.peta.classList.toggle('peta-redup', !this.satelit);
         },
     }));
@@ -296,20 +272,17 @@ document.addEventListener('alpine:init', () => {
         cari: '',
         satelit: false,
         desktop: window.matchMedia('(min-width: 1024px)').matches,
-        init() {
+        async init() {
             this.titik = JSON.parse(this.$refs.awal.textContent);
-            this.peta = L.map(this.$refs.peta, { zoomControl: false, attributionControl: false }).setView(pusat, 13);
-            this.lapisan = ubin().addTo(this.peta);
-            L.control.scale({ position: 'topleft', imperial: false }).addTo(this.peta);
-            this.lapis = L.layerGroup().addTo(this.peta);
             this.urutkan();
+            this.peta = await buatPeta(this.$refs.peta, { pusat, zoom: 13, skala: true });
+            this.lapis = this.peta.grup();
             this.gambar(true);
             navigator.geolocation?.watchPosition((p) => {
                 const pertama = !this.posisi;
                 this.posisi = { lat: p.coords.latitude, lng: p.coords.longitude, akurasi: p.coords.accuracy };
                 if (pertama && !this.desktop) { this.urutkan(); this.gambar(true) } else { this.hitungJarak(); this.gambar() }
             }, () => {}, { enableHighAccuracy: true, maximumAge: 15000 });
-            new ResizeObserver(() => this.peta.invalidateSize()).observe(this.$refs.peta);
         },
         get asal() {
             // posisi HP dipakai hanya bila masih di wilayah kerja (≤ 50 km dari gudang)
@@ -340,9 +313,7 @@ document.addEventListener('alpine:init', () => {
             return !q || `${t.lokasi} ${t.jenis} ${t.wilayah} ${t.nomor}`.toLowerCase().includes(q);
         },
         jarak(a, b) {
-            const r = 6371000, d = Math.PI / 180;
-            const x = Math.sin((b.lat - a.lat) * d / 2) ** 2 + Math.cos(a.lat * d) * Math.cos(b.lat * d) * Math.sin((b.lng - a.lng) * d / 2) ** 2;
-            return 2 * r * Math.asin(Math.sqrt(x));
+            return jarakMeter(a, b);
         },
         urutkan() {
             const sisa = [...this.titik];
@@ -390,41 +361,39 @@ document.addEventListener('alpine:init', () => {
                 </div></div>`;
         },
         gambar(pas = false) {
-            this.lapis.clearLayers();
+            if (!this.peta) return;
+            this.lapis.kosongkan();
             this.penanda = [];
             const jalur = [this.asal, ...this.urut].filter(Boolean).map((t) => [t.lat, t.lng]);
-            if (jalur.length > 1) L.polyline(jalur, { color: '#4556A9', weight: this.desktop ? 4 : 3, opacity: 0.75, dashArray: this.desktop ? null : '6 8' }).addTo(this.lapis);
+            if (jalur.length > 1) this.peta.garis(jalur, { warna: '#4556A9', tebal: this.desktop ? 4 : 3, opacity: 0.75, putus: this.desktop ? null : '6 8' }, this.lapis);
             if (gudang?.lat && (this.desktop || !this.posisi)) {
-                L.marker([gudang.lat, gudang.lng], {
-                    interactive: false,
-                    icon: L.divIcon({ className: '', html: `<span class="pin-gudang"><span>⌂</span><em>${gudang.nama} · ${gudang.jam}</em></span>`, iconSize: [32, 32], iconAnchor: [16, 16] }),
-                }).addTo(this.lapis);
+                this.peta.penanda({
+                    lat: gudang.lat, lng: gudang.lng, interaktif: false, dalam: this.lapis,
+                    html: `<span class="pin-gudang"><span>⌂</span><em>${gudang.nama} · ${gudang.jam}</em></span>`, ukuran: [32, 32], jangkar: [16, 16],
+                });
             }
             this.urut.forEach((t, n) => {
                 const pilih = n === this.aktif;
-                const m = L.marker([t.lat, t.lng], {
-                    zIndexOffset: pilih ? 1000 : 0,
-                    icon: L.divIcon({
-                        className: '',
-                        html: `<span class="pin-titik${pilih ? ' dipilih' : ''}"><span class="isi">${t.ikon}</span><span class="nomor">${n + 1}</span></span>`,
-                        iconSize: pilih ? [56, 56] : [48, 48],
-                        iconAnchor: pilih ? [28, 28] : [24, 24],
-                    }),
-                }).addTo(this.lapis);
-                if (this.desktop) {
-                    m.bindTooltip(`${n + 1} · ${t.lokasi}`, { className: 'tip-titik', direction: 'top', offset: [0, -22] });
-                    m.bindPopup(this.popup(t, n), { className: 'popup-uj', closeButton: true, minWidth: 288, maxWidth: 312, offset: [0, -14] });
-                    m.on('click', () => { this.aktif = n; this.sorotSaja() });
-                } else {
-                    m.on('click', () => this.pilih(n));
-                }
-                this.penanda[n] = m;
+                this.penanda[n] = this.peta.penanda({
+                    lat: t.lat, lng: t.lng, dalam: this.lapis,
+                    z: pilih ? 1000 : 0,
+                    html: `<span class="pin-titik${pilih ? ' dipilih' : ''}"><span class="isi">${t.ikon}</span><span class="nomor">${n + 1}</span></span>`,
+                    ukuran: pilih ? [56, 56] : [48, 48],
+                    jangkar: pilih ? [28, 28] : [24, 24],
+                    ...(this.desktop
+                        ? {
+                            tooltip: { html: `${n + 1} · ${t.lokasi}`, kelas: 'tip-titik', offset: [0, -22] },
+                            popup: { html: this.popup(t, n), kelas: 'popup-uj', tutup: true, lebarMin: 288, lebarMaks: 312, offset: [0, -14] },
+                            klik: () => { this.aktif = n; this.sorotSaja() },
+                        }
+                        : { klik: () => this.pilih(n) }),
+                });
             });
             if (this.posisi) {
-                L.marker([this.posisi.lat, this.posisi.lng], {
-                    interactive: false,
-                    icon: L.divIcon({ className: '', html: '<span class="pin-saya"><span></span><em>Lokasi saya</em></span>', iconSize: [40, 40], iconAnchor: [20, 20] }),
-                }).addTo(this.lapis);
+                this.peta.penanda({
+                    lat: this.posisi.lat, lng: this.posisi.lng, interaktif: false, dalam: this.lapis,
+                    html: '<span class="pin-saya"><span></span><em>Lokasi saya</em></span>', ukuran: [40, 40], jangkar: [20, 20],
+                });
             }
             if (pas && jalur.length) {
                 this.peta.fitBounds(jalur, this.desktop
@@ -433,10 +402,10 @@ document.addEventListener('alpine:init', () => {
             }
         },
         sorotSaja() {
-            this.penanda.forEach((m, n) => m.setZIndexOffset(n === this.aktif ? 1000 : 0));
+            this.penanda.forEach((m, n) => m.z(n === this.aktif ? 1000 : 0));
         },
         sorot(n) {
-            this.penanda[n]?.openTooltip();
+            this.penanda[n]?.bukaTooltip();
         },
         geserKartu() {
             const el = this.$refs.kartu;
@@ -445,7 +414,7 @@ document.addEventListener('alpine:init', () => {
             if (n !== this.aktif && this.urut[n]) {
                 this.aktif = n;
                 this.gambar();
-                this.peta.panTo([this.urut[n].lat, this.urut[n].lng]);
+                this.peta?.panTo([this.urut[n].lat, this.urut[n].lng]);
             }
         },
         pilih(n, bukaPopup = false) {
@@ -453,7 +422,7 @@ document.addEventListener('alpine:init', () => {
             if (this.desktop) {
                 this.gambar();
                 const m = this.penanda[n];
-                if (m) { this.peta.setView(m.getLatLng(), Math.max(this.peta.getZoom(), 15)); if (bukaPopup) m.openPopup() }
+                if (m) { this.peta.setView(m.posisi(), Math.max(this.peta.getZoom(), 15)); if (bukaPopup) m.bukaPopup() }
                 return;
             }
             const kartu = this.$refs.kartu?.querySelectorAll(':scope > div')[n];
@@ -466,9 +435,8 @@ document.addEventListener('alpine:init', () => {
             this.$dispatch('toast', { pesan: this.posisi && !this.desktop ? 'Rute disusun ulang dari lokasi Anda' : 'Rute disusun ulang dari titik awal' });
         },
         gantiLapisan() {
-            this.peta.removeLayer(this.lapisan);
             this.satelit = !this.satelit;
-            this.lapisan = (this.satelit ? satelit() : ubin()).addTo(this.peta);
+            this.peta.gantiLapisan(this.satelit);
             this.$refs.peta.classList.toggle('peta-redup', !this.satelit);
         },
         kePosisi() {
@@ -491,18 +459,20 @@ document.addEventListener('alpine:init', () => {
         gps: null,
         jarak: {},
         km: null,
-        init() {
+        async init() {
             this.titik = JSON.parse(this.$refs.awal.textContent);
-            this.peta = L.map(this.$refs.peta, { zoomControl: false, attributionControl: false }).setView(pusat, 13);
-            ubin().addTo(this.peta);
-            this.lapis = L.featureGroup().addTo(this.peta);
+            this.peta = await buatPeta(this.$refs.peta, { pusat, zoom: 13 });
+            this.lapis = this.peta.grup();
             this.gambar(true);
             navigator.geolocation?.getCurrentPosition((p) => {
                 this.gps = { lat: p.coords.latitude, lng: p.coords.longitude };
-                L.circleMarker([this.gps.lat, this.gps.lng], { radius: 7, color: '#fff', weight: 3, fillColor: '#1A73E8', fillOpacity: 1 }).addTo(this.peta);
+                this.peta.penanda({
+                    lat: this.gps.lat, lng: this.gps.lng, interaktif: false,
+                    html: '<span style="display:block;width:20px;height:20px;border-radius:9999px;background:#1A73E8;border:3px solid #fff;box-shadow:0 1px 4px #0005"></span>',
+                    ukuran: [20, 20], jangkar: [10, 10],
+                });
                 this.hitung();
             }, () => {}, { enableHighAccuracy: true, timeout: 10000 });
-            new ResizeObserver(() => this.peta.invalidateSize()).observe(this.$refs.peta);
         },
         perbarui(titik) {
             this.titik = titik;
@@ -511,20 +481,24 @@ document.addEventListener('alpine:init', () => {
             this.hitung();
         },
         gambar(muat = false) {
-            this.lapis.clearLayers();
+            if (!this.peta) return;
+            this.lapis.kosongkan();
             this.titik.forEach((t, i) => {
                 const nomor = `<b style="font:700 14px/1 sans-serif;color:#fff">${t.no}</b>`;
-                L.marker([t.lat, t.lng], { icon: pinJenis(i === this.aktif ? '#000100' : '#4556A9', nomor, i === this.aktif), zIndexOffset: i === this.aktif ? 1000 : 0 })
-                    .on('click', () => this.pilih(i, true))
-                    .addTo(this.lapis);
+                this.peta.penanda({
+                    ...pinJenis(i === this.aktif ? '#000100' : '#4556A9', nomor, i === this.aktif),
+                    lat: t.lat, lng: t.lng, dalam: this.lapis,
+                    z: i === this.aktif ? 1000 : 0,
+                    klik: () => this.pilih(i, true),
+                });
             });
-            if (muat && this.titik.length) this.peta.fitBounds(this.lapis.getBounds(), { paddingTopLeft: [40, 80], paddingBottomRight: [40, 280], maxZoom: 16 });
+            if (muat && this.titik.length) this.peta.fitBounds(this.titik.map((t) => [t.lat, t.lng]), { paddingTopLeft: [40, 80], paddingBottomRight: [40, 280], maxZoom: 16 });
         },
         pilih(i, gulir = false) {
             if (!this.titik[i]) return;
             this.aktif = i;
             this.gambar();
-            this.peta.panTo([this.titik[i].lat, this.titik[i].lng]);
+            this.peta?.panTo([this.titik[i].lat, this.titik[i].lng]);
             if (gulir) this.$refs.kartu?.children[i]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
         },
         geserKartu() {
@@ -538,7 +512,7 @@ document.addEventListener('alpine:init', () => {
         },
         hitung() {
             if (!this.gps) return;
-            const m = (a, b) => Math.round(this.peta.distance([a.lat, a.lng], [b.lat, b.lng]));
+            const m = (a, b) => Math.round(jarakMeter(a, b));
             this.jarak = Object.fromEntries(this.titik.map((t) => [t.id, m(this.gps, t)]));
             const total = this.titik.reduce((s, t, i) => s + m(i ? this.titik[i - 1] : this.gps, t), 0);
             this.km = this.titik.length ? (total / 1000).toFixed(total < 10000 ? 1 : 0).replace('.', ',') : null;
@@ -550,88 +524,42 @@ document.addEventListener('alpine:init', () => {
 
     /** Peta kecil di detail usulan: pin, radius duplikat, dan usulan berdekatan. */
     Alpine.data('petaTitik', (titik, sekitar, radius, ikon, ikonDuplikat) => ({
-        init() {
-            const p = L.map(this.$refs.peta, { zoomControl: false, attributionControl: false, scrollWheelZoom: false })
-                .setView([titik.lat, titik.lng], 17);
-            ubin().addTo(p);
-            L.circle([titik.lat, titik.lng], { radius, color: '#4556A9', weight: 1, opacity: 0.4, fillColor: '#4556A9', fillOpacity: 0.08 }).addTo(p);
-            sekitar.forEach((b) => L.marker([b.lat, b.lng], { icon: pinJenis('#8A5A00', ikonDuplikat, false, 22), interactive: false }).addTo(p));
-            L.marker([titik.lat, titik.lng], { icon: pinJenis('#4556A9', ikon, false, 26), interactive: false }).addTo(p);
-            new ResizeObserver(() => p.invalidateSize()).observe(this.$refs.peta);
+        async init() {
+            const p = await buatPeta(this.$refs.peta, { pusat: [titik.lat, titik.lng], zoom: 17, scrollZoom: false });
+            p.lingkaran([titik.lat, titik.lng], radius, { warna: '#4556A9' });
+            sekitar.forEach((b) => p.penanda({ ...pinJenis('#8A5A00', ikonDuplikat, false, 22), lat: b.lat, lng: b.lng, interaktif: false }));
+            p.penanda({ ...pinJenis('#4556A9', ikon, false, 26), lat: titik.lat, lng: titik.lng, interaktif: false });
         },
     }));
 
     /** Peta kecil statis dengan satu pin (halaman lacak). */
     Alpine.data('petaMini', (lat, lng, ikon) => ({
-        init() {
-            const p = L.map(this.$el, { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, keyboard: false })
-                .setView([lat, lng], 16);
-            ubin().addTo(p);
-            L.marker([lat, lng], { icon: pinJenis('#4556A9', ikon, true), interactive: false }).addTo(p);
+        async init() {
+            const p = await buatPeta(this.$el, { pusat: [lat, lng], zoom: 16, statis: true });
+            p.penanda({ ...pinJenis('#4556A9', ikon, true), lat, lng, interaktif: false });
         },
     }));
 
     /** Peta publik perlengkapan terpasang (beranda). */
     Alpine.data('petaTerpasang', ({ jenis, titik }, pusat) => ({
-        init() {
+        async init() {
             const lebar = window.innerWidth >= 1024;
-            const peta = L.map(this.$refs.peta, { zoomControl: false, scrollWheelZoom: false, attributionControl: true })
-                .setView(pusat, 14);
-            ubin().addTo(peta);
-            L.control.zoom({ position: 'topright' }).addTo(peta);
-            const grup = L.featureGroup().addTo(peta);
-            titik.forEach((t, i) => {
+            const peta = await buatPeta(this.$refs.peta, { pusat, zoom: 14, scrollZoom: false, atribusi: true, zoomKontrol: true });
+            const pin = titik.map((t, i) => {
                 const j = jenis[t.jenis] ?? { warna: '#4556A9', ikon: '' };
-                L.marker([t.lat, t.lng], { icon: pinJenis(j.warna, j.ikon, i === 0, null, t.rusak ? 'rusak' : '') })
-                    .bindPopup(t.popup, { className: 'popup-uj', closeButton: false, maxWidth: 260, autoPan: false })
-                    .addTo(grup);
+                return peta.penanda({
+                    ...pinJenis(j.warna, j.ikon, i === 0, null, t.rusak ? 'rusak' : ''),
+                    lat: t.lat, lng: t.lng,
+                    popup: { html: t.popup, kelas: 'popup-uj', tutup: false, lebarMaks: 260, autoPan: false },
+                });
             });
             if (titik.length) {
                 // Geser titik ke sisi kanan layar agar tidak tertutup teks hero.
-                peta.fitBounds(grup.getBounds(), { paddingTopLeft: [lebar ? 780 : 40, 170], paddingBottomRight: [lebar ? 320 : 40, 250], maxZoom: 16 });
-                grup.getLayers()[0].openPopup();
+                peta.fitBounds(titik.map((t) => [t.lat, t.lng]), { paddingTopLeft: [lebar ? 780 : 40, 170], paddingBottomRight: [lebar ? 320 : 40, 250], maxZoom: 16 });
+                pin[0].bukaPopup();
             } else if (lebar) {
-                peta.panBy([-380, 0], { animate: false });
+                peta.panBy([-380, 0], false);
             }
-            new ResizeObserver(() => peta.invalidateSize()).observe(this.$refs.peta);
-        },
-    }));
-
-    /** Peta sebaran: titik = [{lat,lng,tone,id,popup, ikon?, warna?}] — dengan `ikon` pin memakai ikon jenis. */
-    Alpine.data('petaSebaran', ({ titik = [], pusat, zoom = 13, pilih = null }) => ({
-        peta: null,
-        lapis: null,
-        daftar: [],
-        init() {
-            this.peta = L.map(this.$refs.peta, { zoomControl: true, scrollWheelZoom: true }).setView(pusat, zoom);
-            ubin().addTo(this.peta);
-            this.lapis = L.featureGroup().addTo(this.peta);
-            this.gambar(titik, pilih);
-            new ResizeObserver(() => this.peta.invalidateSize()).observe(this.$refs.peta);
-        },
-        gambar(daftar, aktif = null) {
-            this.daftar = daftar;
-            this.lapis.clearLayers();
-            daftar.forEach((t) => {
-                const ikon = t.ikon
-                    ? pinJenis(t.id === aktif ? '#000100' : (t.warna ?? WARNA[t.tone] ?? WARNA.proses), t.ikon, t.id === aktif)
-                    : penanda(t.tone, t.id === aktif);
-                const m = L.marker([t.lat, t.lng], { icon: ikon, zIndexOffset: t.id === aktif ? 1000 : 0 }).addTo(this.lapis);
-                if (t.popup) m.bindPopup(t.popup);
-                if (t.id) m.on('click', () => { this.$dispatch('pilih-titik', { id: t.id }); if (t.ikon) this.gambar(this.daftar, t.id) });
-            });
-            if (daftar.length > 1 && !aktif) this.peta.fitBounds(this.lapis.getBounds(), { padding: [40, 40], maxZoom: 16 });
-            if (aktif) {
-                const t = daftar.find((x) => x.id === aktif);
-                if (t) this.peta.setView([t.lat, t.lng], Math.max(this.peta.getZoom(), 15));
-            }
-        },
-        lokasiSaya() {
-            navigator.geolocation?.getCurrentPosition(
-                (p) => this.peta.setView([p.coords.latitude, p.coords.longitude], 16),
-                () => this.$dispatch('toast', { pesan: 'Lokasi HP tidak bisa dibaca. Nyalakan GPS.', gagal: true }),
-                { enableHighAccuracy: true, timeout: 10000 },
-            );
         },
     }));
 
@@ -647,47 +575,46 @@ document.addEventListener('alpine:init', () => {
         cari: '',
         hasil: [],
         cariBuka: false,
-        init() {
+        async init() {
             const awal = lat ? [lat, lng] : pusat;
-            this.peta = L.map(this.$refs.peta, { zoomControl: false }).setView(awal, lat ? 17 : 13);
-            ubin().addTo(this.peta);
+            this.peta = await buatPeta(this.$refs.peta, { pusat: awal, zoom: lat ? 17 : 13, atribusi: true });
             if (titik.length) {
-                this.lapis = L.featureGroup().addTo(this.peta);
+                this.lapis = this.peta.grup();
                 this.gambarTitik();
             }
             if (lat) this.taruh(lat, lng, false);
-            if (this.aktif) this.pin?.setOpacity(0);
-            this.peta.on('click', (e) => this.taruh(e.latlng.lat, e.latlng.lng));
-            new ResizeObserver(() => this.peta.invalidateSize()).observe(this.$refs.peta);
+            if (this.aktif) this.pin?.opacity(0);
+            this.peta.pada('klik', (e) => this.taruh(e.lat, e.lng));
         },
         gambarTitik() {
-            this.lapis.clearLayers();
+            this.lapis.kosongkan();
             titik.forEach((t) => {
                 const on = t.id === this.aktif;
-                L.marker([t.lat, t.lng], { icon: pinJenis(on ? '#000100' : t.warna, t.ikon, on, on ? 36 : 28), zIndexOffset: on ? 1000 : 0 })
-                    .on('click', () => { this.sorot(t.id); this.$dispatch('pilih-titik', { id: t.id }) })
-                    .addTo(this.lapis);
+                this.peta.penanda({
+                    ...pinJenis(on ? '#000100' : t.warna, t.ikon, on, on ? 36 : 28),
+                    lat: t.lat, lng: t.lng, dalam: this.lapis,
+                    z: on ? 1000 : 0,
+                    klik: () => { this.sorot(t.id); this.$dispatch('pilih-titik', { id: t.id }) },
+                });
             });
         },
         sorot(id) {
             this.aktif = id;
             if (this.lapis) this.gambarTitik();
-            this.pin?.setOpacity(id ? 0 : 1); // tertaut: pin perlengkapan yang disorot menggantikan pin lokasi
+            this.pin?.opacity(id ? 0 : 1); // tertaut: pin perlengkapan yang disorot menggantikan pin lokasi
         },
         taruh(la, ln, kirim = true, geser = false) {
+            if (!this.peta) return;
             if (!this.pin) {
-                this.pin = L.marker([la, ln], {
-                    draggable: true,
-                    icon: L.divIcon({
-                        className: '',
-                        html: `<span class="pin-lokasi"><span class="akurasi"></span><svg viewBox="0 0 24 24" fill="#4556A9" stroke="#fff" stroke-width="1.5"><path d="M12 22s8-6.5 8-13a8 8 0 1 0-16 0c0 6.5 8 13 8 13Z"/><circle cx="12" cy="9" r="3" fill="#fff" stroke="none"/></svg></span>`,
-                        iconSize: [36, 36],
-                        iconAnchor: [18, 34],
-                    }),
-                }).addTo(this.peta);
-                this.pin.on('dragend', () => { const p = this.pin.getLatLng(); this.kirim(p.lat, p.lng) });
+                this.pin = this.peta.penanda({
+                    lat: la, lng: ln, geser: true,
+                    html: `<span class="pin-lokasi"><span class="akurasi"></span><svg viewBox="0 0 24 24" fill="#4556A9" stroke="#fff" stroke-width="1.5"><path d="M12 22s8-6.5 8-13a8 8 0 1 0-16 0c0 6.5 8 13 8 13Z"/><circle cx="12" cy="9" r="3" fill="#fff" stroke="none"/></svg></span>`,
+                    ukuran: [36, 36],
+                    jangkar: [18, 34],
+                    geserSelesai: (a, b) => this.kirim(a, b),
+                });
             } else {
-                this.pin.setLatLng([la, ln]);
+                this.pin.setPosisi(la, ln);
             }
             if (geser || !kirim) this.peta.setView([la, ln], 17);
             if (kirim) this.kirim(la, ln);
@@ -704,8 +631,7 @@ document.addEventListener('alpine:init', () => {
         },
         async cariAlamat() {
             if (this.cari.length < 3) return;
-            const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=id&limit=5&accept-language=id&q=${encodeURIComponent(this.cari)}`);
-            this.hasil = await r.json();
+            this.hasil = await cariAlamat(this.cari);
         },
         pilihHasil(h) {
             this.hasil = [];

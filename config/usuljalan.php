@@ -10,6 +10,7 @@ return [
     'laporan_per_jam' => 5,         // batas laporan kerusakan per IP per jam
     'batas_hari_periksa' => 7,      // label merah di antrian Dishub
     'peta_awal' => [-3.4489, 116.0022], // Batulicin, Tanah Bumbu (ganti sesuai daerah)
+    'batas_impor_derajat' => 0.6,   // impor perlengkapan lama: koordinat lebih jauh dari ini (derajat) dari peta_awal ditolak
     // Titik awal rute pemasangan (gudang/UPTD Dishub)
     'gudang' => [
         'nama' => env('USULJALAN_GUDANG', 'Gudang Dishub'),

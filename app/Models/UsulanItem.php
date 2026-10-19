@@ -42,6 +42,12 @@ class UsulanItem extends Model
         return $this->hasMany(UsulanFoto::class)->where('jenis', 'hasil');
     }
 
+    /** Baris perlengkapan terpasang (ada setelah item ditandai terpasang). */
+    public function aset()
+    {
+        return $this->hasOne(PerlengkapanTerpasang::class);
+    }
+
     public function laporanKerusakan()
     {
         return $this->hasMany(LaporanKerusakan::class)->latest('id');
@@ -95,11 +101,34 @@ class UsulanItem extends Model
             'lng_terpasang' => $lng,
             'catatan_terpasang' => $catatan ?: null,
         ]);
+        $this->sinkronAset();
         $u->hitungStatus();
         $u->catat("{$this->jenis->namaPendek()} terpasang");
         Kabar::kirim($u, "{$this->jenis->namaPendek()} sudah terpasang",
             "{$jumlah} {$this->jenis->satuan} di ".($u->alamat ?: $u->lokasiSingkat()).'. Terima kasih sudah mengusulkan!',
             'terpasang', ['foto' => $terakhir?->url()]);
+    }
+
+    /** Samakan baris perlengkapan terpasang dengan data terpasang item ini (titik terpasang, atau titik usulan). */
+    public function sinkronAset(): PerlengkapanTerpasang
+    {
+        $u = $this->usulan;
+        $tanggal = $this->terpasang_at;
+        $aset = $this->aset()->updateOrCreate([], [
+            'jenis_perlengkapan_id' => $this->jenis_perlengkapan_id,
+            'jumlah' => $this->jumlah_terpasang ?? $this->jumlah,
+            'lat' => $this->lat_terpasang ?? $u->lat,
+            'lng' => $this->lng_terpasang ?? $u->lng,
+            'alamat' => $u->alamat,
+            'kecamatan_id' => $u->kecamatan_id,
+            'desa_id' => $u->desa_id,
+            'terpasang_at' => $tanggal,
+            'tahun' => $tanggal?->year,
+            'catatan' => $this->catatan_terpasang,
+        ]);
+        LaporanKerusakan::where('usulan_item_id', $this->id)->whereNull('perlengkapan_terpasang_id')->update(['perlengkapan_terpasang_id' => $aset->id]);
+
+        return $aset;
     }
 
     /** Batalkan penandaan terpasang (tombol Urungkan). */
@@ -110,6 +139,7 @@ class UsulanItem extends Model
             $f->delete();
         });
         $this->update(['status' => StatusItem::Disetujui, 'jumlah_terpasang' => null, 'terpasang_at' => null, 'lat_terpasang' => null, 'lng_terpasang' => null, 'catatan_terpasang' => null]);
+        $this->aset()->delete();
         $this->usulan->hitungStatus();
         $this->usulan->catat("Penandaan {$this->jenis->namaPendek()} terpasang dibatalkan", null, false);
     }

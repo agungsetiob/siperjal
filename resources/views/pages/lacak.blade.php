@@ -191,7 +191,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
         <div class="sticky top-0 z-[1000] flex h-14 items-center gap-1 border-b border-line bg-bg px-2 lg:hidden">
         <a href="{{ url('/') }}" wire:navigate class="grid size-11 place-items-center" aria-label="Kembali">@svg('lucide-arrow-left', 'size-[22px]')</a>
         <span class="flex-1 text-base font-semibold">Lacak Usulan</span>
-        <button x-data @click="navigator.share ? navigator.share({ title: '{{ $u->nomor }}', url: '{{ $link }}' }) : (navigator.clipboard.writeText('{{ $link }}'), $dispatch('toast', { pesan: 'Link disalin' }))" class="grid size-11 place-items-center" aria-label="Bagikan">@svg('lucide-share-2', 'size-5')</button>
+        <button x-data @click="navigator.share ? navigator.share({ title: '{{ $u->nomor }}', url: '{{ $link }}' }) : (salin('{{ $link }}'), $dispatch('toast', { pesan: 'Link disalin' }))" class="grid size-11 place-items-center" aria-label="Bagikan">@svg('lucide-share-2', 'size-5')</button>
     </div>
         <div class="flex flex-col gap-5 px-4 pb-6 pt-2">
             <div class="flex flex-col gap-1.5">
@@ -245,7 +245,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
             <p class="flex items-center gap-2 font-caption text-xs text-fg-muted">@svg('lucide-shield-check', 'size-4 shrink-0') Nama dan kontak pengusul tidak ditampilkan di halaman ini.</p>
         </div>
         <div class="sticky bottom-0 flex gap-2 border-t border-line bg-bg px-4 pb-7 pt-3">
-            <button x-data @click="navigator.clipboard.writeText('{{ $link }}'); $dispatch('toast', { pesan: 'Link disalin' })" class="grid size-[52px] shrink-0 place-items-center rounded-sm outline outline-1 -outline-offset-1 outline-fg" aria-label="Salin link">@svg('lucide-link', 'size-5')</button>
+            <button x-data @click="salin('{{ $link }}'); $dispatch('toast', { pesan: 'Link disalin' })" class="grid size-[52px] shrink-0 place-items-center rounded-sm outline outline-1 -outline-offset-1 outline-fg" aria-label="Salin link">@svg('lucide-link', 'size-5')</button>
             <a href="https://wa.me/?text={{ urlencode("Pantau usulan jalan {$u->nomor}: {$link}") }}" target="_blank" class="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-sm bg-accent text-base font-semibold text-fg-inverse shadow-sm">Bagikan ke WhatsApp @svg('lucide-message-circle', 'size-[18px]')</a>
         </div>
     </div>
@@ -299,7 +299,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
                 </a>
                 <div class="flex h-[46px] min-w-0 flex-1 items-center overflow-hidden rounded-sm outline outline-1 -outline-offset-1 outline-line">
                     <span class="flex min-w-0 flex-1 items-center gap-2 px-3.5 font-caption text-[13px] text-fg-muted">@svg('lucide-link', 'size-4 shrink-0') <span class="truncate">{{ str($link)->after('://') }}</span></span>
-                    <button x-on:click="navigator.clipboard.writeText('{{ $link }}'); $dispatch('toast', { pesan: 'Link disalin' })" class="flex h-full items-center gap-2 border-l border-line bg-surface-muted px-4 text-sm font-semibold hover:bg-line">@svg('lucide-copy', 'size-4') Salin link</button>
+                    <button x-on:click="salin('{{ $link }}'); $dispatch('toast', { pesan: 'Link disalin' })" class="flex h-full items-center gap-2 border-l border-line bg-surface-muted px-4 text-sm font-semibold hover:bg-line">@svg('lucide-copy', 'size-4') Salin link</button>
                 </div>
             </div>
 

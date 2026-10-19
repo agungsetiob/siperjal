@@ -136,7 +136,7 @@ new #[Layout('layouts.app')] class extends Component
                     ['inbox', number_format($jumlahUsulan, 0, ',', '.'), 'Usulan masuk', number_format($masuk, 0, ',', '.').' item diminta'],
                     ['clipboard-check', $tahap['lolos']['jumlah'], 'Item lolos Dishub', $pct($tahap['lolos']['jumlah'], $masuk).'% dari item diusulkan'],
                     ['badge-check', $tahap['disetujui']['jumlah'], 'Item disetujui Bappeda', $pct($tahap['disetujui']['jumlah'], $tahap['lolos']['jumlah']).'% dari yang lolos Dishub'],
-                    ['map-pin-check', $tahap['terpasang']['jumlah'], 'Item terpasang', 'tampil di peta publik'],
+                    ['map-pin-check', $tahap['terpasang']['jumlah'], 'Item terpasang', 'tampil di peta publik'.(($lama = \App\Models\PerlengkapanTerpasang::lama()->count()) ? ' · +'.number_format($lama, 0, ',', '.').' terpasang sebelum SIPERJAL' : '')],
                 ] as [$ikon, $nilai, $label, $sub])
                     <div class="flex flex-col gap-3.5 rounded-md bg-bg p-6 shadow-sm">
                         <span class="grid size-10 place-items-center rounded-sm bg-accent-soft text-accent">@svg('lucide-'.$ikon, 'size-5')</span>

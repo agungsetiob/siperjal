@@ -3,7 +3,7 @@
 @use('App\Enums\StatusLaporan', 'SL')
 @php
     $s = $l->status;
-    $item = $l->item;
+    $item = $l->aset;
     $nama = $l->jenis?->namaPendek() ?? 'Perlengkapan';
     $penjelasan = match ($s) {
         SL::Baru => 'Laporanmu sudah diterima. Dishub akan menugaskan petugas untuk cek ke lokasi.',
@@ -77,7 +77,7 @@
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="text-base font-semibold">{{ $nama }}</span>
                 @if ($item)
-                    <span class="text-sm text-fg-muted">terpasang {{ $item->terpasang_at?->translatedFormat('j M Y') }} · dari usulan {{ $item->usulan->nomor }}</span>
+                    <span class="text-sm text-fg-muted">terpasang {{ $item->waktuPasang() }} · {{ $item->usulanItem ? 'dari usulan '.$item->usulanItem->usulan->nomor : 'sebelum SIPERJAL' }}</span>
                 @endif
             </span>
         </div>
@@ -97,7 +97,7 @@
         @elseif ($s === SL::MenungguPerbaikan)
             <p class="text-center font-caption text-[13px] text-fg-muted">Laporan tidak bisa dibatalkan setelah dikonfirmasi petugas.</p>
         @elseif (in_array($s, [SL::Selesai, SL::Ditolak]))
-            <a href="{{ route('lapor', $item ? ['item' => $item->id] : ['jenis' => 'lapor']) }}" wire:navigate class="flex h-12 items-center justify-center gap-2 rounded-sm text-base font-semibold outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">@svg('lucide-wrench', 'size-[18px]') Lapor lagi bila rusak kembali</a>
+            <a href="{{ route('lapor', $item ? ['aset' => $item->id] : ['jenis' => 'lapor']) }}" wire:navigate class="flex h-12 items-center justify-center gap-2 rounded-sm text-base font-semibold outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">@svg('lucide-wrench', 'size-[18px]') Lapor lagi bila rusak kembali</a>
         @endif
     </div>
 </div>

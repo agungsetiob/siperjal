@@ -6,10 +6,10 @@ use App\Enums\StatusItem;
 use App\Enums\StatusLaporan;
 use App\Enums\StatusUsulan;
 use App\Models\JenisPerlengkapan;
+use App\Models\PerlengkapanTerpasang;
 use App\Models\LaporanKerusakan;
 use App\Models\User;
 use App\Models\Usulan;
-use App\Models\UsulanItem;
 use App\Notifications\LaporanBerubah;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -30,17 +30,19 @@ class AlurPemeliharaanTest extends TestCase
     }
 
     /** Perlengkapan terpasang dari usulan Pemdes (pengusul asli ≠ pelapor). */
-    private function terpasang(): UsulanItem
+    private function terpasang(): PerlengkapanTerpasang
     {
         $desa = $this->user('desa@usuljalan.test');
         $u = Usulan::create(['user_id' => $desa->id, 'instansi_id' => $desa->instansi_id, 'nomor' => 'USL-2026-00001', 'status' => StatusUsulan::Terpasang,
             'lat' => -3.4492, 'lng' => 116.0018, 'alamat' => 'Jl. Raya Batulicin', 'diajukan_at' => now()->subMonths(3)]);
 
-        return $u->items()->create(['jenis_perlengkapan_id' => JenisPerlengkapan::where('nama', 'like', 'Lampu penerangan%')->value('id'),
+        $item = $u->items()->create(['jenis_perlengkapan_id' => JenisPerlengkapan::where('nama', 'like', 'Lampu penerangan%')->value('id'),
             'jumlah' => 1, 'status' => StatusItem::Terpasang, 'terpasang_at' => now()->subMonth(), 'jumlah_terpasang' => 1]);
+
+        return $item->sinkronAset();
     }
 
-    private function lapor(UsulanItem $item): LaporanKerusakan
+    private function lapor(PerlengkapanTerpasang $item): LaporanKerusakan
     {
         $this->actingAs($this->user('warga@usuljalan.test'));
         Livewire::test('pages::pemeliharaan.lapor')
@@ -244,7 +246,7 @@ class AlurPemeliharaanTest extends TestCase
         $this->assertNull($l->user_id);
         $this->assertSame('Siti Aminah', $l->namaPelapor());
         $this->assertSame('siti@contoh.id', $l->kontak_email);
-        $this->assertTrue($item->usulan->riwayat()->where('aksi', 'like', '%dilaporkan rusak%')->where('publik', true)->exists());
+        $this->assertTrue($item->usulanItem->usulan->riwayat()->where('aksi', 'like', '%dilaporkan rusak%')->where('publik', true)->exists());
         Notification::assertSentTo($this->user('dishub@usuljalan.test'), LaporanBerubah::class, fn ($n) => $n->jenis === 'kerusakan_baru');
 
         $this->get(route('lapor.status', $l->nomor))->assertOk()->assertSee($l->nomor)->assertSee('Dicek petugas');
@@ -268,7 +270,7 @@ class AlurPemeliharaanTest extends TestCase
 
         // publik: form diganti "Sudah dilaporkan", kirim tidak membuat laporan baru
         auth()->logout();
-        $this->get(route('lapor.item', $item->id))->assertOk()->assertSee('Sudah dilaporkan')->assertSee($l->nomor);
+        $this->get(route('lapor.aset', $item->id))->assertOk()->assertSee('Sudah dilaporkan')->assertSee($l->nomor);
         Livewire::test('pages::pemeliharaan.publik', ['item' => $item])
             ->set('kerusakan', 'rusak')->set('foto', [UploadedFile::fake()->image('a.jpg')])->call('kirim')
             ->assertRedirect(route('lapor.status', $l->nomor));
@@ -277,7 +279,7 @@ class AlurPemeliharaanTest extends TestCase
 
         // pengusul masuk: diarahkan ke form /lapor, dan tidak bisa melapor ganda
         $this->actingAs($this->user('desa@usuljalan.test'));
-        Livewire::test('pages::pemeliharaan.publik', ['item' => $item])->assertRedirect(route('lapor', ['item' => $item->id]));
+        Livewire::test('pages::pemeliharaan.publik', ['item' => $item])->assertRedirect(route('lapor', ['aset' => $item->id]));
         Livewire::test('pages::pemeliharaan.lapor')
             ->set('pilihan', 'lapor')
             ->call('pilih', $item->id)
@@ -293,6 +295,7 @@ class AlurPemeliharaanTest extends TestCase
         Storage::fake('public');
         $a = $this->terpasang();
         $b = $a->replicate();
+        $b->usulan_item_id = null; // perlengkapan lama (terpasang sebelum SIPERJAL)
         $b->save();
         config(['usuljalan.laporan_per_jam' => 1]);
 
@@ -309,8 +312,8 @@ class AlurPemeliharaanTest extends TestCase
             ->assertRedirect('/');
         $this->assertSame(1, LaporanKerusakan::count());
 
-        $b->update(['status' => StatusItem::Disetujui]);
-        $this->get(route('lapor.item', $b->id))->assertNotFound();
+        $this->get(route('lapor.aset', $b->id))->assertOk();
+        $this->get(route('lapor.aset', 99999))->assertNotFound();
         $this->get(route('lapor.item', 99999))->assertNotFound();
         $this->get(route('lapor.status', 'LPR-2026-99999'))->assertOk()->assertSee('Nomor tidak ditemukan');
     }
@@ -379,11 +382,11 @@ class AlurPemeliharaanTest extends TestCase
             ->assertSet('kecamatanManual', true)
             ->assertSee('Perlengkapan terpasang di dekat titik ini')
             ->call('pilih', $item->id)
-            ->assertSet('itemId', $item->id)
+            ->assertSet('asetId', $item->id)
             ->assertSet('jenisId', $item->jenis_perlengkapan_id)
             ->assertSet('lat', -3.4492)
             ->call('lepas')
-            ->assertSet('itemId', null)
+            ->assertSet('asetId', null)
             ->assertSet('jenisId', null);
         // titik jauh: tidak ada tawaran
         $c->call('aturLokasi', -3.6, 116.3, [])->assertDontSee('Perlengkapan terpasang di dekat titik ini');
@@ -401,7 +404,7 @@ class AlurPemeliharaanTest extends TestCase
         \Illuminate\Support\Facades\Schema::create('laporan_rusak_foto', function ($t) {
             $t->id(); $t->foreignId('laporan_rusak_id'); $t->string('jenis'); $t->string('path'); $t->decimal('lat', 10, 7)->nullable(); $t->decimal('lng', 10, 7)->nullable(); $t->timestamps();
         });
-        $id = \DB::table('laporan_rusak')->insertGetId(['nomor' => 'LPR-2026-00042', 'usulan_item_id' => $item->id, 'jenis' => 'miring', 'status' => 'diproses',
+        $id = \DB::table('laporan_rusak')->insertGetId(['nomor' => 'LPR-2026-00042', 'usulan_item_id' => $item->usulan_item_id, 'jenis' => 'miring', 'status' => 'diproses',
             'kontak_email' => 'lama@contoh.id', 'ditangani_oleh' => $this->user('dishub@usuljalan.test')->id, 'diproses_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
         \DB::table('laporan_rusak_foto')->insert(['laporan_rusak_id' => $id, 'jenis' => 'laporan', 'path' => 'laporan/1/a.jpg', 'created_at' => now(), 'updated_at' => now()]);
 

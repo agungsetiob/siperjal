@@ -73,11 +73,28 @@ class DemoSeeder extends Seeder
                     if ($akhir === SU::Terpasang) {
                         $i->update(['status' => SI::Terpasang, 'jumlah_terpasang' => $i->jumlahEfektif(), 'terpasang_at' => $diajukan->copy()->addDays(30),
                             'lat_terpasang' => $u->lat + $k * 0.0004, 'lng_terpasang' => $u->lng + $k * 0.0004]);
+                        $i->sinkronAset();
                     }
                 }
                 $u->riwayat()->create(['aksi' => 'Diputuskan Bappeda', 'user_id' => $bappeda->id, 'created_at' => $diajukan->copy()->addDays(15)]);
             }
             $u->hitungStatus();
+        }
+
+        // perlengkapan yang terpasang sebelum SIPERJAL (tanpa usulan)
+        foreach (range(1, 8) as $n) {
+            $d = Desa::inRandomOrder()->first();
+            $j = $jenis->random();
+            \App\Models\PerlengkapanTerpasang::create([
+                'jenis_perlengkapan_id' => $j->id,
+                'jumlah' => mt_rand(1, 3),
+                'lat' => -3.45 + (mt_rand(-400, 400) / 10000),
+                'lng' => 115.985 + (mt_rand(-200, 200) / 10000),
+                'alamat' => $alamat[($n + 3) % count($alamat)],
+                'kecamatan_id' => $d->kecamatan_id,
+                'desa_id' => $d->id,
+                'tahun' => mt_rand(2015, 2024),
+            ]);
         }
 
         $this->call(FotoDemoSeeder::class);

@@ -1,23 +1,22 @@
 <?php
 
-use App\Enums\StatusItem;
 use App\Enums\StatusLaporan as SL;
 use App\Models\LaporanKerusakan;
-use App\Models\UsulanItem;
+use App\Models\PerlengkapanTerpasang;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /**
- * Publik (tanpa login): laporkan kerusakan perlengkapan terpasang (/lapor/{item}, dari popup peta beranda & halaman lacak)
+ * Publik (tanpa login): laporkan kerusakan perlengkapan terpasang (/lapor/aset/{item}, dari popup peta beranda & halaman lacak)
  * dan lihat status laporan (/lapor/status/{nomor}). Pengusul yang sudah masuk diarahkan ke form /lapor.
  */
 new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class extends Component
 {
     use WithFileUploads;
 
-    public ?UsulanItem $item = null;
+    public ?PerlengkapanTerpasang $item = null; // perlengkapan terpasang yang dilaporkan
     public ?LaporanKerusakan $laporan = null;
     public string $nomor = '';
 
@@ -29,19 +28,19 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
     public string $email = '';
     public string $situs = ''; // jebakan bot, harus kosong
 
-    public function mount(?UsulanItem $item = null, ?string $nomor = null)
+    public function mount(?PerlengkapanTerpasang $item = null, ?string $nomor = null)
     {
         if ($nomor !== null) {
             $this->nomor = strtoupper(trim($nomor));
-            $this->laporan = LaporanKerusakan::with('jenis', 'kecamatan', 'desa', 'item.usulan', 'foto', 'petugas')->where('nomor', $this->nomor)->first();
+            $this->laporan = LaporanKerusakan::with('jenis', 'kecamatan', 'desa', 'aset.usulanItem.usulan', 'foto', 'petugas')->where('nomor', $this->nomor)->first();
 
             return null;
         }
-        abort_unless($item?->status === StatusItem::Terpasang, 404);
+        abort_unless($item, 404);
         if (auth()->user()?->isPengusul()) {
-            return $this->redirectRoute('lapor', ['item' => $item->id], navigate: true);
+            return $this->redirectRoute('lapor', ['aset' => $item->id], navigate: true);
         }
-        $this->item = $item->load('jenis', 'usulan.desa', 'usulan.kecamatan', 'laporanTerbuka');
+        $this->item = $item->load('jenis', 'desa', 'kecamatan', 'usulanItem.usulan', 'laporanTerbuka');
 
         return null;
     }
@@ -55,7 +54,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
     public function kirim()
     {
         $item = $this->item;
-        abort_unless($item?->status === StatusItem::Terpasang, 404);
+        abort_unless($item, 404);
         if ($this->situs !== '') {
             return $this->redirect('/', navigate: true);
         }
@@ -81,7 +80,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
             'email.email' => 'Format email belum benar.',
         ]);
 
-        $laporan = LaporanKerusakan::buat(['item' => $item], null, $this->kerusakan, trim($this->catatan),
+        $laporan = LaporanKerusakan::buat(['aset' => $item], null, $this->kerusakan, trim($this->catatan),
             collect($this->foto)->map(fn ($f, $n) => ['file' => $f] + ($this->fotoKoordinat[$n] ?? []))->all(),
             ['nama_pelapor' => trim($this->nama), 'kontak_email' => trim($this->email)],
         );
@@ -106,13 +105,13 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
 
 @php
     $l = $laporan;
-    $it = $l ? $l->item : $item;
-    $u = $it?->usulan;
+    $it = $l ? $l->aset : $item;
+    $u = $it?->usulanItem?->usulan; // null untuk perlengkapan yang terpasang sebelum SIPERJAL
     // perlengkapan yang dilaporkan: dari laporan (bisa tanpa item terpasang) atau dari item yang hendak dilaporkan
     $jenisL = $l ? $l->jenis : $item?->jenis;
     $ikonL = $jenisL?->ikon ?? 'wrench';
-    [$latL, $lngL] = $l ? [$l->lat(), $l->lng()] : [(float) ($it?->lat_terpasang ?? $u?->lat), (float) ($it?->lng_terpasang ?? $u?->lng)];
-    $lokasiL = $l ? $l->lokasi() : ($u ? ($u->alamat ?: $u->lokasiSingkat()) : null);
+    [$latL, $lngL] = $l ? [$l->lat(), $l->lng()] : [$it?->lat, $it?->lng];
+    $lokasiL = $l ? $l->lokasi() : $it?->lokasi();
     $terbuka = $item?->laporanTerbuka;
     $linkStatus = $l ? route('lapor.status', $l->nomor) : null;
     $penjelasan = $l ? match ($l->status) {
@@ -131,7 +130,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
         <a href="{{ url('/') }}" wire:navigate class="grid size-11 place-items-center" aria-label="Kembali">@svg('lucide-arrow-left', 'size-[22px]')</a>
         <span class="flex-1 text-base font-semibold">{{ $l || ! $item ? 'Laporan Kerusakan' : 'Laporkan Kerusakan' }}</span>
         @if ($l)
-            <button x-data @click="navigator.share ? navigator.share({ title: '{{ $l->nomor }}', url: '{{ $linkStatus }}' }) : (navigator.clipboard.writeText('{{ $linkStatus }}'), $dispatch('toast', { pesan: 'Link disalin' }))" class="grid size-11 place-items-center" aria-label="Bagikan">@svg('lucide-share-2', 'size-5')</button>
+            <button x-data @click="navigator.share ? navigator.share({ title: '{{ $l->nomor }}', url: '{{ $linkStatus }}' }) : (salin('{{ $linkStatus }}'), $dispatch('toast', { pesan: 'Link disalin' }))" class="grid size-11 place-items-center" aria-label="Bagikan">@svg('lucide-share-2', 'size-5')</button>
         @endif
     </div>
 
@@ -159,7 +158,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
                         <span class="font-caption text-xs font-semibold uppercase tracking-[0.6px] text-accent">Nomor laporan</span>
                         <h1 class="judul whitespace-nowrap text-[32px] leading-9 sm:text-[40px] sm:leading-10">{{ $l->nomor }}</h1>
                     </div>
-                    <button @click="navigator.clipboard.writeText('{{ $l->nomor }}'); $dispatch('toast', { pesan: 'Nomor disalin' })" class="flex h-11 items-center gap-1.5 rounded-sm px-3.5 text-[15px] font-semibold text-accent outline outline-1 -outline-offset-1 outline-line">@svg('lucide-copy', 'size-4') Salin</button>
+                    <button @click="salin('{{ $l->nomor }}'); $dispatch('toast', { pesan: 'Nomor disalin' })" class="flex h-11 items-center gap-1.5 rounded-sm px-3.5 text-[15px] font-semibold text-accent outline outline-1 -outline-offset-1 outline-line">@svg('lucide-copy', 'size-4') Salin</button>
                 </div>
                 <div class="flex flex-col gap-2 rounded-md bg-surface-muted p-4">
                     <x-status :status="$l->status" class="w-fit" />
@@ -178,7 +177,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
                     </div>
                 @endif
                 <div class="flex gap-2" x-data>
-                    <button @click="navigator.clipboard.writeText('{{ $linkStatus }}'); $dispatch('toast', { pesan: 'Link disalin' })" class="flex h-12 flex-1 items-center justify-center gap-2 rounded-sm text-[15px] font-semibold outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">@svg('lucide-link', 'size-4') Salin link</button>
+                    <button @click="salin('{{ $linkStatus }}'); $dispatch('toast', { pesan: 'Link disalin' })" class="flex h-12 flex-1 items-center justify-center gap-2 rounded-sm text-[15px] font-semibold outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">@svg('lucide-link', 'size-4') Salin link</button>
                     <a href="https://wa.me/?text={{ urlencode("Laporan kerusakan {$l->nomor}: {$linkStatus}") }}" target="_blank" class="flex h-12 flex-1 items-center justify-center gap-2 rounded-sm bg-success text-[15px] font-semibold text-fg-inverse shadow-sm">@svg('lucide-message-circle', 'size-4') WhatsApp</a>
                 </div>
             </div>
@@ -195,7 +194,10 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
                     <span class="text-base font-semibold">{{ $jenisL?->namaPendek() ?? 'Perlengkapan' }}</span>
                     <span class="text-sm text-fg-muted">{{ $lokasiL }}</span>
                     @if ($it)
-                        <span class="font-caption text-xs text-fg-muted">Dipasang {{ $it->terpasang_at?->translatedFormat('j M Y') }} · usulan <a href="{{ route('lacak', $u->nomor) }}" wire:navigate class="font-semibold text-accent">{{ $u->nomor }}</a></span>
+                        <span class="font-caption text-xs text-fg-muted">
+                            @if ($u) Dipasang {{ $it->waktuPasang() }} · usulan <a href="{{ route('lacak', $u->nomor) }}" wire:navigate class="font-semibold text-accent">{{ $u->nomor }}</a>
+                            @else Terpasang {{ $it->tahun ? 'sejak '.$it->waktuPasang() : 'sebelum SIPERJAL' }} @endif
+                        </span>
                     @endif
                 </span>
             </div>

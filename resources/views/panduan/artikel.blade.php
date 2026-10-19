@@ -125,7 +125,7 @@
                     <div class="flex flex-col gap-2.5 rounded-md bg-surface-muted p-4" x-data="{ ok: false }">
                         <span class="flex items-center gap-2 text-[13px] font-semibold">@svg('lucide-smartphone', 'size-4') Ikuti dari HP</span>
                         <p class="text-xs leading-[1.5] text-fg-muted">Panduan ini paling mudah diikuti sambil memegang HP. Kirim tautannya ke HP-mu.</p>
-                        <button type="button" @click="navigator.clipboard.writeText(location.href.split('#')[0]).then(() => { ok = true; setTimeout(() => ok = false, 1800) })" class="flex w-fit items-center gap-1.5 text-[13px] font-semibold text-accent">
+                        <button type="button" @click="salin(location.href.split('#')[0]).then(() => { ok = true; setTimeout(() => ok = false, 1800) })" class="flex w-fit items-center gap-1.5 text-[13px] font-semibold text-accent">
                             @svg('lucide-link', 'size-3.5') <span x-text="ok ? 'Tautan disalin' : 'Salin tautan'">Salin tautan</span>
                         </button>
                     </div>

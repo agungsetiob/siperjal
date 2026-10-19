@@ -9,6 +9,7 @@
     <title>{{ $title ?? 'SIPERJAL' }}</title>
     @include('partials.pwa')
     @fonts
+    @include('partials.peta-config')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>

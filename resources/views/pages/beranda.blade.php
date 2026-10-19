@@ -2,6 +2,7 @@
 
 use App\Enums\StatusItem;
 use App\Models\JenisPerlengkapan;
+use App\Models\PerlengkapanTerpasang;
 use App\Models\Usulan;
 use App\Models\UsulanItem;
 use Livewire\Attributes\Computed;
@@ -42,16 +43,15 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
         return [
             'masuk' => Usulan::whereYear('diajukan_at', $tahun)->count(),
             'disetujui' => UsulanItem::whereYear('diputuskan_at', $tahun)->whereIn('status', [StatusItem::Disetujui, StatusItem::Terpasang])->count(),
-            'terpasang' => UsulanItem::where('status', StatusItem::Terpasang)->count(),
+            'terpasang' => PerlengkapanTerpasang::count(),
         ];
     }
 
     #[Computed]
     public function terpasang()
     {
-        return UsulanItem::with('jenis', 'usulan.desa', 'usulan.kecamatan', 'laporanTerbuka')
-            ->where('status', StatusItem::Terpasang)
-            ->latest('terpasang_at')->limit(500)->get();
+        return PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka')
+            ->orderByRaw('terpasang_at is null')->latest('terpasang_at')->latest('id')->limit(500)->get();
     }
 
     /** Data peta: jenis (warna + ikon) dan titik terpasang. */
@@ -63,8 +63,8 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
                 'ikon' => svg('lucide-'.$j->ikon, 'size-4')->toHtml(),
             ]])->all(),
             'titik' => $this->terpasang->map(fn ($i) => [
-                'lat' => (float) ($i->lat_terpasang ?? $i->usulan->lat),
-                'lng' => (float) ($i->lng_terpasang ?? $i->usulan->lng),
+                'lat' => $i->lat,
+                'lng' => $i->lng,
                 'jenis' => $i->jenis_perlengkapan_id,
                 'rusak' => (bool) $i->laporanTerbuka,
                 'popup' => view('partials.popup-terpasang', ['item' => $i])->render(),
@@ -98,7 +98,7 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
         @if ($akhir)
             <div class="pointer-events-none absolute right-4 top-[22px] z-[3] flex max-w-[220px] items-center gap-2 rounded-md bg-bg px-2.5 py-2 shadow-md lg:hidden">
                 <span class="grid size-[22px] shrink-0 place-items-center rounded-full p-1 text-fg-inverse" style="background: {{ $akhir->jenis->warna }}">@svg('lucide-'.$akhir->jenis->ikon, 'size-3')</span>
-                <span class="flex min-w-0 flex-col gap-px"><span class="truncate text-[13px] font-semibold">{{ $akhir->jenis->namaPendek() }} · terpasang</span><span class="truncate font-caption text-xs text-fg-muted">{{ $akhir->terpasang_at?->translatedFormat('j M Y') }} · {{ $akhir->usulan->alamat ?: $akhir->usulan->lokasiSingkat() }}</span></span>
+                <span class="flex min-w-0 flex-col gap-px"><span class="truncate text-[13px] font-semibold">{{ $akhir->jenis->namaPendek() }} · terpasang</span><span class="truncate font-caption text-xs text-fg-muted">{{ $akhir->waktuPasang() }} · {{ $akhir->lokasi() }}</span></span>
             </div>
         @endif
         <span class="pointer-events-none absolute left-4 top-[252px] z-[3] flex items-center gap-1.5 rounded-sm bg-bg px-2.5 py-1.5 font-caption text-[13px] font-semibold shadow-md lg:hidden">@svg('lucide-map-pin-check', 'size-3.5 text-success') {{ number_format($this->terpasang->count(), 0, ',', '.') }} perlengkapan terpasang</span>

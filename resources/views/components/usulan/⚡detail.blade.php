@@ -746,7 +746,7 @@ new class extends Component
             @elseif ($st === $S::Revisi)
                 <a href="{{ route('usulan.ubah', $u) }}" wire:navigate class="flex h-[52px] items-center justify-center gap-2 rounded-sm bg-accent text-base font-semibold text-fg-inverse shadow-sm">Perbaiki @svg('lucide-arrow-right', 'size-[18px]')</a>
             @else
-                <button x-data x-on:click="navigator.share ? navigator.share({ title: 'Usulan {{ $u->nomor }}', url: '{{ route('lacak', $u->nomor) }}' }) : (navigator.clipboard.writeText('{{ route('lacak', $u->nomor) }}'), $dispatch('toast', { pesan: 'Link lacak disalin' }))"
+                <button x-data x-on:click="navigator.share ? navigator.share({ title: 'Usulan {{ $u->nomor }}', url: '{{ route('lacak', $u->nomor) }}' }) : (salin('{{ route('lacak', $u->nomor) }}'), $dispatch('toast', { pesan: 'Link lacak disalin' }))"
                         class="flex h-[52px] items-center justify-center gap-2 rounded-sm bg-accent text-base font-semibold text-fg-inverse shadow-sm">Bagikan link lacak @svg('lucide-share-2', 'size-[18px]')</button>
                 @if ($bisaBatal)
                     <button wire:click="batalkan" class="h-11 text-base font-semibold text-danger">Batalkan usulan</button>
@@ -1389,7 +1389,7 @@ new class extends Component
                     @unless ($u->diperiksa_at)
                         <x-tombol variant="teks" wire:click="batalkan">Batalkan</x-tombol>
                     @endunless
-                    <x-tombol variant="kedua" ikon="share-2" x-data x-on:click="navigator.clipboard.writeText('{{ route('lacak', $u->nomor) }}'); $dispatch('toast', { pesan: 'Link lacak disalin' })">Bagikan link lacak</x-tombol>
+                    <x-tombol variant="kedua" ikon="share-2" x-data x-on:click="salin('{{ route('lacak', $u->nomor) }}'); $dispatch('toast', { pesan: 'Link lacak disalin' })">Bagikan link lacak</x-tombol>
                 @endif
             </section>
         @endif

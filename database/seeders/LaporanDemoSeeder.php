@@ -2,13 +2,12 @@
 
 namespace Database\Seeders;
 
-use App\Enums\StatusItem as SI;
 use App\Enums\StatusLaporan as SL;
 use App\Models\JenisPerlengkapan;
 use App\Models\Kecamatan;
 use App\Models\LaporanKerusakan;
 use App\Models\User;
-use App\Models\UsulanItem;
+use App\Models\PerlengkapanTerpasang;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
 
@@ -23,7 +22,7 @@ class LaporanDemoSeeder extends Seeder
         $petugas = User::where('email', 'petugas@usuljalan.test')->first() ?? $koordinator;
         $foto = glob(database_path('seeders/foto/lokasi-*.jpg'));
         $hasil = glob(database_path('seeders/foto/hasil-*.jpg'));
-        $items = UsulanItem::where('status', SI::Terpasang)->get();
+        $items = PerlengkapanTerpasang::with('jenis')->orderBy('id')->get();
 
         $skenario = [
             [SL::Baru, 'mati', 'Mati sejak Sabtu malam. Ruas ini gelap total setelah magrib, kemarin ada motor jatuh.', $warga, 0],
@@ -57,7 +56,8 @@ class LaporanDemoSeeder extends Seeder
             $t = LaporanKerusakan::tempatDari($item);
             $l = LaporanKerusakan::create([
                 'nomor' => sprintf('LPR-%d-%05d', now()->year, LaporanKerusakan::count() + 1),
-                'usulan_item_id' => $item->id,
+                'usulan_item_id' => $item->usulan_item_id,
+                'perlengkapan_terpasang_id' => $item->id,
                 'jenis_perlengkapan_id' => $t['jenis_id'],
                 'lat' => $t['lat'],
                 'lng' => $t['lng'],

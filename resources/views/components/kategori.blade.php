@@ -1,5 +1,5 @@
 {{-- Category Switch (pen.dev): pindah Usulan ↔ Pemeliharaan di kepala daftar. Pengganti menu navbar.
-     aktif: usulan | pemeliharaan. Bappeda tidak punya pemeliharaan → tidak tampil. --}}
+     aktif: usulan | pemeliharaan | terpasang (Dishub & admin). Bappeda tidak punya pemeliharaan → tidak tampil. --}}
 @props(['aktif' => 'usulan'])
 @use('App\Enums\Role')
 @use('App\Enums\StatusLaporan')
@@ -17,6 +17,10 @@
             ? \App\Models\LaporanKerusakan::where('user_id', $user->id)->count()
             : \App\Models\LaporanKerusakan::where('status', StatusLaporan::Baru)->count()],
     ] : [];
+    // data perlengkapan terpasang (termasuk yang lama, sebelum SIPERJAL): hanya Dishub & admin
+    if ($user->hasRole(Role::Dishub, Role::Admin)) {
+        $pilihan['terpasang'] = ['Terpasang', 'map-pin-check', route('terpasang'), 0];
+    }
 @endphp
 @if ($tampil)
     <nav {{ $attributes->class('flex gap-0.5 rounded-sm bg-surface-muted p-[3px]') }} aria-label="Kategori">

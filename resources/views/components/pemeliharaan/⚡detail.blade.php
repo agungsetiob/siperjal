@@ -30,7 +30,7 @@ new class extends Component
     #[Computed]
     public function laporan(): LaporanKerusakan
     {
-        return LaporanKerusakan::with('jenis', 'kecamatan', 'desa', 'item.usulan.instansi', 'item.usulan.user', 'pelapor', 'petugas', 'penugas', 'penutup', 'foto')
+        return LaporanKerusakan::with('jenis', 'kecamatan', 'desa', 'aset.jenis', 'aset.usulanItem.usulan.instansi', 'aset.usulanItem.usulan.user', 'pelapor', 'petugas', 'penugas', 'penutup', 'foto')
             ->findOrFail($this->laporanId);
     }
 
@@ -48,7 +48,7 @@ new class extends Component
         $radius = config('usuljalan.radius_berdekatan');
 
         return LaporanKerusakan::aktif()->whereKeyNot($l->id)->get()
-            ->filter(fn ($b) => ($l->usulan_item_id && $b->usulan_item_id === $l->usulan_item_id)
+            ->filter(fn ($b) => ($l->perlengkapan_terpasang_id && $b->perlengkapan_terpasang_id === $l->perlengkapan_terpasang_id)
                 || ($l->lat() && $b->lat() && \App\Models\Usulan::jarak($l->lat(), $l->lng(), $b->lat(), $b->lng()) <= $radius))
             ->values();
     }
@@ -121,8 +121,8 @@ new class extends Component
 @php
     $l = $this->laporan;
     $s = $l->status;
-    $item = $l->item;
-    $asal = $item?->usulan;
+    $item = $l->aset;
+    $asal = $item?->usulanItem?->usulan; // null: terpasang sebelum SIPERJAL
     $fotoPelapor = $l->fotoJenis('pelapor');
     $fotoCek = $l->fotoJenis('cek');
     $fotoHasil = $l->fotoJenis('hasil');
@@ -260,15 +260,22 @@ new class extends Component
         <div class="grid gap-3 lg:grid-cols-3">
             <div class="flex items-center gap-3 rounded-md bg-bg p-3.5 outline outline-1 -outline-offset-1 outline-line">
                 <x-ikon-jenis :jenis="$item->jenis" class="size-10 shrink-0" />
-                <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">{{ $item->jenis->namaPendek() }} · {{ $item->jumlah_terpasang ?? $item->jumlahEfektif() }} {{ $item->jenis->satuan }}</span><span class="truncate font-caption text-xs text-fg-muted">{{ $item->jenis->deskripsi }}</span></span>
+                <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">{{ $item->jenis->namaPendek() }} · {{ $item->jumlah }} {{ $item->jenis->satuan }}</span><span class="truncate font-caption text-xs text-fg-muted">{{ $item->jenis->deskripsi }}</span></span>
             </div>
-            <a href="{{ route('usulan', $asal) }}" wire:navigate class="flex items-center gap-3 rounded-md bg-bg p-3.5 outline outline-1 -outline-offset-1 outline-line hover:outline-accent/40">
-                <span class="grid size-10 shrink-0 place-items-center rounded-sm bg-surface-muted">@svg('lucide-file-text', 'size-5')</span>
-                <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">Asal usulan · <span class="text-accent">{{ $asal->nomor }}</span></span><span class="truncate font-caption text-xs text-fg-muted">diajukan {{ $asal->namaPengusul() }}</span></span>
-            </a>
+            @if ($asal)
+                <a href="{{ route('usulan', $asal) }}" wire:navigate class="flex items-center gap-3 rounded-md bg-bg p-3.5 outline outline-1 -outline-offset-1 outline-line hover:outline-accent/40">
+                    <span class="grid size-10 shrink-0 place-items-center rounded-sm bg-surface-muted">@svg('lucide-file-text', 'size-5')</span>
+                    <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">Asal usulan · <span class="text-accent">{{ $asal->nomor }}</span></span><span class="truncate font-caption text-xs text-fg-muted">diajukan {{ $asal->namaPengusul() }}</span></span>
+                </a>
+            @else
+                <div class="flex items-center gap-3 rounded-md bg-bg p-3.5 outline outline-1 -outline-offset-1 outline-line">
+                    <span class="grid size-10 shrink-0 place-items-center rounded-sm bg-surface-muted">@svg('lucide-history', 'size-5')</span>
+                    <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">Terpasang sebelum SIPERJAL</span><span class="truncate font-caption text-xs text-fg-muted">Data lama · tanpa usulan</span></span>
+                </div>
+            @endif
             <div class="flex items-center gap-3 rounded-md bg-bg p-3.5 outline outline-1 -outline-offset-1 outline-line">
                 <span class="grid size-10 shrink-0 place-items-center rounded-sm bg-success-bg text-success">@svg('lucide-map-pin-check', 'size-5')</span>
-                <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">Terpasang · {{ $item->terpasang_at?->translatedFormat('j M Y') }}</span><span class="truncate font-caption text-xs text-fg-muted">{{ $item->terpasang_at?->diffForHumans() }}</span></span>
+                <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">Terpasang · {{ $item->waktuPasang() ?? '—' }}</span><span class="truncate font-caption text-xs text-fg-muted">{{ $item->terpasang_at?->diffForHumans() ?? ($item->tahun ? 'tahun '.$item->tahun : '') }}</span></span>
             </div>
         </div>
     </div>
