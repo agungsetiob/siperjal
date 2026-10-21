@@ -117,6 +117,7 @@ class UsulanItem extends Model
         $aset = $this->aset()->updateOrCreate([], [
             'jenis_perlengkapan_id' => $this->jenis_perlengkapan_id,
             'jumlah' => $this->jumlah_terpasang ?? $this->jumlah,
+            'harga_satuan' => $this->harga_satuan,
             'lat' => $this->lat_terpasang ?? $u->lat,
             'lng' => $this->lng_terpasang ?? $u->lng,
             'alamat' => $u->alamat,

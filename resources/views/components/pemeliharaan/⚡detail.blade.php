@@ -6,7 +6,6 @@ use App\Models\LaporanKerusakan;
 use App\Models\User;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
-use Livewire\WithFileUploads;
 
 /**
  * Panel detail laporan kerusakan untuk koordinator Dishub / admin (desain PM1).
@@ -14,18 +13,14 @@ use Livewire\WithFileUploads;
  */
 new class extends Component
 {
-    use WithFileUploads;
-
     public int $laporanId;
     public int $posisi = 0;
     public int $total = 0;
 
-    public ?string $dialog = null; // tugaskan, tolak, selesai
+    public ?string $dialog = null; // tugaskan, tolak
     public ?int $petugasId = null;
     public string $catatanTugas = '';
     public string $alasan = '';
-    public $foto = [];
-    public string $catatanSelesai = '';
 
     #[Computed]
     public function laporan(): LaporanKerusakan
@@ -68,7 +63,7 @@ new class extends Component
     {
         $this->bolehKelola();
         $this->resetValidation();
-        $this->reset('catatanTugas', 'alasan', 'foto', 'catatanSelesai');
+        $this->reset('catatanTugas', 'alasan');
         $this->dialog = $dialog;
         if ($dialog === 'tugaskan') {
             $this->petugasId = $this->laporan->petugas_id ?? $this->petugas->first()?->id;
@@ -100,19 +95,6 @@ new class extends Component
         $l->tolak(trim($this->alasan));
         $this->dialog = null;
         $this->dispatch('toast', pesan: 'Laporan ditolak · pelapor dikabari');
-        $this->dispatch('laporan-diproses', lanjut: true);
-    }
-
-    public function selesai(): void
-    {
-        $this->bolehKelola();
-        $l = $this->laporan;
-        abort_unless($l->status === SL::MenungguPerbaikan, 403);
-        $this->validate(['foto' => 'array|max:5', 'foto.*' => 'image|max:12288', 'catatanSelesai' => 'nullable|string|max:300']);
-
-        $l->selesai(collect($this->foto)->map(fn ($f) => ['file' => $f])->all(), trim($this->catatanSelesai));
-        $this->dialog = null;
-        $this->dispatch('toast', pesan: 'Selesai diperbaiki · pelapor dikabari', urungkan: 'lpr-selesai:'.$l->id);
         $this->dispatch('laporan-diproses', lanjut: true);
     }
 };
@@ -318,22 +300,31 @@ new class extends Component
         @endif
 
         @if ($s->aktif() && ! $this->kelola)
-            <span class="flex items-center gap-1.5 border-t border-line pt-4 font-caption text-xs text-fg-muted">@svg('lucide-eye', 'size-3.5') Tindak lanjut dilakukan oleh Dishub</span>
+            <span class="flex items-center gap-1.5 border-t border-line pt-4 font-caption text-xs text-fg-muted">@svg('lucide-eye', 'size-3.5') Admin hanya melihat · tindak lanjut oleh Dishub</span>
         @elseif ($s->aktif())
             <div class="flex flex-wrap items-center gap-3 border-t border-line pt-4">
                 @if ($s === SL::MenungguPerbaikan)
                     <span class="flex items-center gap-1.5 font-caption text-xs text-fg-muted">@svg('lucide-bell', 'size-3.5') pelapor & petugas dikabari otomatis</span>
                     <span class="flex-1"></span>
-                    <button type="button" wire:click="buka('selesai')" class="flex w-full items-center justify-center gap-2 sm:w-auto rounded-sm bg-success px-5 py-3 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">Tandai Selesai Diperbaiki @svg('lucide-circle-check', 'size-[18px]')</button>
+                    <button type="button" wire:click="$dispatch('buka-tugas', { id: {{ $l->id }} })" class="flex w-full items-center justify-center gap-2 sm:w-auto rounded-sm bg-success px-5 py-3 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">Tandai Selesai Diperbaiki @svg('lucide-circle-check', 'size-[18px]')</button>
                 @else
                     <button type="button" wire:click="buka('tolak')" class="flex items-center gap-1.5 rounded-sm px-3 py-2.5 text-sm font-semibold text-danger hover:bg-danger-bg">@svg('lucide-circle-x', 'size-4') Tolak laporan</button>
                     <span class="font-caption text-xs text-fg-muted">untuk laporan iseng / duplikat</span>
                     <span class="flex-1"></span>
-                    <button type="button" wire:click="buka('tugaskan')" class="flex w-full items-center justify-center gap-2 sm:w-auto rounded-sm bg-accent px-5 py-3 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">{{ $s === SL::Ditugaskan ? 'Ganti Petugas' : 'Tugaskan Petugas' }} @svg('lucide-user-round-plus', 'size-[18px]')</button>
+                    @if ($s === SL::Ditugaskan)
+                        <button type="button" wire:click="buka('tugaskan')" class="flex items-center gap-1.5 rounded-sm px-3 py-2.5 text-sm font-semibold hover:bg-surface-muted">@svg('lucide-user-round-plus', 'size-4') Ganti Petugas</button>
+                        <button type="button" wire:click="$dispatch('buka-tugas', { id: {{ $l->id }} })" class="flex w-full items-center justify-center gap-2 sm:w-auto rounded-sm bg-accent px-5 py-3 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">Cek Kondisi @svg('lucide-clipboard-check', 'size-[18px]')</button>
+                    @else
+                        <button type="button" wire:click="buka('tugaskan')" class="flex w-full items-center justify-center gap-2 sm:w-auto rounded-sm bg-accent px-5 py-3 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">Tugaskan Petugas @svg('lucide-user-round-plus', 'size-[18px]')</button>
+                    @endif
                 @endif
             </div>
         @endif
     </div>
+
+    @if ($this->kelola)
+        <livewire:pemeliharaan.tugas :tanpa-peta="true" :key="'cek-'.$l->id" />
+    @endif
 
     {{-- ── Dialog ── --}}
     @if ($dialog === 'tugaskan')
@@ -402,32 +393,6 @@ new class extends Component
                 <div class="mt-5 flex justify-end gap-2">
                     <x-tombol variant="teks" wire:click="$set('dialog', null)">Batal</x-tombol>
                     <x-tombol variant="bahaya" wire:click="tolak" wire:loading.attr="disabled" wire:target="tolak">Tolak Laporan</x-tombol>
-                </div>
-            </div>
-        </div>
-    @elseif ($dialog === 'selesai')
-        <div class="fixed inset-0 z-[3000] flex items-end justify-center bg-fg/50 sm:items-center" wire:click.self="$set('dialog', null)" @keydown.escape.window="$wire.set('dialog', null)">
-            <div class="w-full rounded-t-xl bg-bg p-6 sm:max-w-md sm:rounded-md" x-data="{ mengunggah: false }">
-                <span class="font-caption text-xs font-semibold text-fg-muted">{{ $l->nomor }} · {{ $l->judul() }}</span>
-                <h3 class="judul mt-1 text-2xl">Selesai diperbaiki</h3>
-                <p class="mt-1 text-sm text-fg-muted">Pelapor dan pengusul asli dikabari otomatis. Bisa diurungkan 10 menit.</p>
-                <div class="mt-4 flex flex-col gap-2">
-                    <span class="text-sm font-semibold">Foto hasil perbaikan <span class="font-caption text-xs font-normal text-fg-muted">opsional, ikut dikirim ke pelapor</span></span>
-                    <div class="flex gap-2 overflow-x-auto">
-                        <label class="flex size-20 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-md bg-accent-soft text-accent outline outline-[1.5px] -outline-offset-1 outline-dashed outline-accent">
-                            @svg('lucide-image-plus', 'size-5') <span class="font-caption text-xs font-semibold" x-text="mengunggah ? ($store.sinyal.ada ? 'Mengunggah…' : 'Menunggu sinyal…') : 'Tambah'">Tambah</span>
-                            <input type="file" accept="image/*" multiple class="hidden" x-on:change="mengunggah = true; $wire.uploadMultiple('foto', [...$event.target.files], () => mengunggah = false, () => mengunggah = false)">
-                        </label>
-                        @foreach ($foto as $f)
-                            <img src="{{ $f->temporaryUrl() }}" class="size-20 shrink-0 rounded-md object-cover" alt="">
-                        @endforeach
-                    </div>
-                    @error('foto.*') <span class="text-sm text-danger">{{ $message }}</span> @enderror
-                </div>
-                <textarea wire:model="catatanSelesai" rows="2" maxlength="300" class="input mt-3 text-sm" placeholder="Catatan (opsional), mis. tiang diganti & pondasi dicor ulang"></textarea>
-                <div class="mt-5 flex justify-end gap-2">
-                    <x-tombol variant="teks" wire:click="$set('dialog', null)">Batal</x-tombol>
-                    <button type="button" wire:click="selesai" wire:loading.attr="disabled" wire:target="selesai,foto" :disabled="mengunggah" class="flex items-center gap-2 rounded-sm bg-success px-4 py-2.5 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110 disabled:opacity-50">Tandai Selesai @svg('lucide-check', 'size-[18px]')</button>
                 </div>
             </div>
         </div>

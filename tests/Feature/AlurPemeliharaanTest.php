@@ -141,6 +141,38 @@ class AlurPemeliharaanTest extends TestCase
             ->filter(fn ($n) => $n->data['jenis'] === 'kerusakan_selesai')->count());
     }
 
+    public function test_tindak_lanjut_petugas_dari_panel_detail_tanpa_peta(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $l = $this->lapor($this->terpasang());
+        $petugas = $this->user('petugas@usuljalan.test');
+        $l->tugaskan($petugas, '');
+
+        // petugas melihat tombol Cek Kondisi di detail; admin tidak
+        $this->actingAs($petugas);
+        Livewire::test('pemeliharaan.detail', ['laporanId' => $l->id])->assertSee('Cek Kondisi');
+        $this->actingAs($this->user('admin@usuljalan.test'));
+        Livewire::test('pemeliharaan.detail', ['laporanId' => $l->id])->assertDontSee('Cek Kondisi')->assertSee('Admin hanya melihat');
+        Livewire::test('pemeliharaan.tugas', ['tanpaPeta' => true])->call('buka', $l->id)->assertForbidden();
+
+        // sheet dibuka lewat event dari detail, lalu cek → selesai
+        $this->actingAs($petugas);
+        Livewire::test('pemeliharaan.tugas', ['tanpaPeta' => true])
+            ->dispatch('buka-tugas', id: $l->id)->assertSet('sheet', 'cek')
+            ->set('foto', [UploadedFile::fake()->image('cek.jpg')])
+            ->call('cek', true)->assertHasNoErrors()->assertDispatched('laporan-diproses', lanjut: true);
+        $this->assertSame(StatusLaporan::MenungguPerbaikan, $l->fresh()->status);
+
+        Livewire::test('pemeliharaan.detail', ['laporanId' => $l->id])->assertSee('Tandai Selesai Diperbaiki');
+        Livewire::test('pemeliharaan.tugas', ['tanpaPeta' => true])
+            ->dispatch('buka-tugas', id: $l->id)->assertSet('sheet', 'selesai')
+            ->call('selesai')->assertHasErrors('foto')
+            ->set('foto', [UploadedFile::fake()->image('hasil.jpg')])
+            ->call('selesai')->assertHasNoErrors()->assertDispatched('toast');
+        $this->assertSame(StatusLaporan::Selesai, $l->fresh()->status);
+    }
+
     public function test_petugas_menolak_dan_koordinator_menolak_dengan_alasan(): void
     {
         Notification::fake();
@@ -214,7 +246,7 @@ class AlurPemeliharaanTest extends TestCase
         $this->actingAs($this->user('admin@usuljalan.test'));
         $this->get(route('pemeliharaan', $l))->assertOk()->assertSee($l->nomor);
         Livewire::test('pemeliharaan.detail', ['laporanId' => $l->id])
-            ->assertSee('Tindak lanjut dilakukan oleh Dishub')
+            ->assertSee('Admin hanya melihat')
             ->assertDontSee('Tugaskan Petugas')
             ->call('buka', 'tugaskan')->assertForbidden();
         Livewire::test('pemeliharaan.detail', ['laporanId' => $l->id])->call('tolak')->assertForbidden();

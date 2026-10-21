@@ -6,14 +6,17 @@ urutan: 2
 layar: [pemeliharaan]
 durasi: 3 menit
 perangkat: HP
-diperbarui: 2026-10-04
+diperbarui: 2026-10-19
 ---
 
 Koordinator Dishub menugaskan laporan kerusakan kepadamu. Tugasmu: cek kondisi di lokasi, putuskan apakah perlu diperbaiki, lalu tandai selesai setelah diperbaiki.
 
 ## 1. Buka titik tugas
 
-Buka **Usulan**, pilih **Pemeliharaan**, lalu ketuk **Peta**. Tab **Ditugaskan** berisi laporan yang menunggu dicek, dan tab **Perbaikan** berisi laporan yang sudah dipastikan rusak.
+> [!TIP]
+> Tidak lewat peta pun bisa: buka laporan dari daftar **Pemeliharaan** (di HP maupun komputer), lalu ketuk **Cek Kondisi** di bagian **Tindak lanjut**. Lembar isiannya sama persis dengan yang ada di peta.
+
+Di HP, buka **Usulan**, pilih **Pemeliharaan**, lalu ketuk **Peta**. Tab **Ditugaskan** berisi laporan yang menunggu dicek, dan tab **Perbaikan** berisi laporan yang sudah dipastikan rusak.
 
 ```gambar
 src: ../gambar/lapangan-tugas.png
@@ -56,7 +59,7 @@ penanda:
 
 ## 4. Tandai selesai diperbaiki
 
-Setelah perbaikan dikerjakan, buka tab **Perbaikan** dan ketuk **Selesai Diperbaiki**.
+Setelah perbaikan dikerjakan, buka tab **Perbaikan** dan ketuk **Selesai Diperbaiki**. Dari daftar, buka laporannya lalu ketuk **Tandai Selesai Diperbaiki**.
 
 ```gambar
 src: ../gambar/lapangan-perbaikan.png

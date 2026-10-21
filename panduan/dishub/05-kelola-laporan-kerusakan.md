@@ -71,7 +71,7 @@ Setelah perlengkapan selesai diperbaiki, klik **Tandai Selesai Diperbaiki**.
 src: ../gambar/dishub-dialog-selesai.png
 keterangan: Jendela Selesai diperbaiki
 penanda:
-  - [48.6, 49.8, "Foto hasil perbaikan. Boleh dikosongkan di komputer."]
+  - [48.6, 49.8, "Foto hasil perbaikan. Wajib minimal 1."]
   - [41.7, 65.6, "Tandai Selesai. Pelapor dan pengusul asli dikabari."]
 ```
 

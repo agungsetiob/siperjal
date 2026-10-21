@@ -22,6 +22,10 @@ new #[Layout('layouts.app')] class extends Component
         $n = auth()->user()->notifications()->findOrFail($id);
         $n->markAsRead();
 
+        if (isset($n->data['tautan'])) {
+            return $this->redirect($n->data['tautan'], navigate: true);
+        }
+
         if (isset($n->data['laporan_id'])) {
             return $this->redirectRoute('pemeliharaan', $n->data['laporan_id'], navigate: true);
         }
@@ -47,6 +51,7 @@ new #[Layout('layouts.app')] class extends Component
 @php
     $gaya = [
         'revisi' => ['triangle-alert', 'bg-warning-bg text-warning'],
+        'minta_jenis' => ['package-plus', 'bg-accent-soft text-accent'],
         'disetujui' => ['badge-check', 'bg-success-bg text-success'],
         'terpasang' => ['map-pin-check', 'bg-success-bg text-success'],
         'duplikat' => ['copy', 'bg-surface-muted text-fg-muted'],

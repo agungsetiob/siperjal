@@ -27,6 +27,10 @@ new class extends Component
     {
         $petugas = ! auth()->user()->isPengusul();
 
+        if (isset($data['tautan'])) {
+            return [$data['aksi'] ?? 'Lihat', $data['tautan']];
+        }
+
         if (isset($data['laporan_id'])) {
             return [$data['jenis'] === 'kerusakan_tugas' && $petugas ? 'Cek lokasi' : 'Lihat laporan', route('pemeliharaan', $data['laporan_id'])];
         }
@@ -63,6 +67,7 @@ new class extends Component
 @php
     $gaya = [
         'baru' => ['inbox', 'bg-accent-soft text-accent'],
+        'minta_jenis' => ['package-plus', 'bg-accent-soft text-accent'],
         'revisi_ulang' => ['rotate-ccw', 'bg-warning-bg text-warning'],
         'revisi' => ['triangle-alert', 'bg-warning-bg text-warning'],
         'disetujui' => ['badge-check', 'bg-success-bg text-success'],

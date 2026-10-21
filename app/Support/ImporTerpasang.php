@@ -11,11 +11,11 @@ use Spatie\SimpleExcel\SimpleExcelReader;
 
 /**
  * Impor perlengkapan yang terpasang sebelum SIPERJAL dari Excel/CSV: baca + validasi (pratinjau), lalu simpan satu batch.
- * Kolom: Perlengkapan, Jumlah, Latitude, Longitude, Alamat, Kecamatan, Desa, Tahun, Catatan.
+ * Kolom: Perlengkapan, Jumlah, Harga satuan, Latitude, Longitude, Alamat, Kecamatan, Desa, Tahun, Catatan.
  */
 class ImporTerpasang
 {
-    public const KOLOM = ['Perlengkapan', 'Jumlah', 'Latitude', 'Longitude', 'Alamat', 'Kecamatan', 'Desa', 'Tahun', 'Catatan'];
+    public const KOLOM = ['Perlengkapan', 'Jumlah', 'Harga satuan', 'Latitude', 'Longitude', 'Alamat', 'Kecamatan', 'Desa', 'Tahun', 'Catatan'];
 
     public const MAKS_BARIS = 2000;
 
@@ -24,7 +24,7 @@ class ImporTerpasang
 
     private const ALIAS = [
         'perlengkapan' => 'jenis', 'jenis' => 'jenis', 'jenisperlengkapan' => 'jenis',
-        'jumlah' => 'jumlah', 'latitude' => 'lat', 'lat' => 'lat', 'longitude' => 'lng', 'lng' => 'lng', 'lon' => 'lng',
+        'jumlah' => 'jumlah', 'harga' => 'harga', 'hargasatuan' => 'harga', 'hargasatuanrp' => 'harga', 'latitude' => 'lat', 'lat' => 'lat', 'longitude' => 'lng', 'lng' => 'lng', 'lon' => 'lng',
         'alamat' => 'alamat', 'lokasi' => 'alamat', 'kecamatan' => 'kecamatan', 'desa' => 'desa', 'tahun' => 'tahun',
         'tahunpasang' => 'tahun', 'catatan' => 'catatan', 'keterangan' => 'catatan',
     ];
@@ -41,6 +41,8 @@ class ImporTerpasang
         if ($ekstensi !== 'xlsx') {
             $baris1 = (string) strtok((string) file_get_contents($path), "\n");
             $pembaca->useDelimiter(substr_count($baris1, ';') > substr_count($baris1, ',') ? ';' : ',');
+        } elseif ($pembaca->hasSheet('Data')) {
+            $pembaca = SimpleExcelReader::create($path, 'xlsx')->fromSheetName('Data'); // template: abaikan sheet Daftar perlengkapan
         }
 
         $jenis = JenisPerlengkapan::all()->flatMap(fn ($j) => [
@@ -73,6 +75,7 @@ class ImporTerpasang
             $lng = self::angka($r['lng'] ?? null);
             $jumlah = ($r['jumlah'] ?? '') === '' ? 1 : self::angka($r['jumlah'] ?? null);
             $tahun = ($r['tahun'] ?? '') === '' ? null : (int) $r['tahun'];
+            $harga = self::rupiah($r['harga'] ?? null);
 
             $galat = match (true) {
                 ! $j => 'Perlengkapan "'.($r['jenis'] ?? '').'" tidak dikenal',
@@ -80,6 +83,7 @@ class ImporTerpasang
                 abs($lat - $pusatLat) > $batas || abs($lng - $pusatLng) > $batas => 'Koordinat di luar wilayah',
                 $jumlah === null || $jumlah < 1 || $jumlah != (int) $jumlah => 'Jumlah harus bilangan bulat ≥ 1',
                 $tahun !== null && ($tahun < 1970 || $tahun > now()->year) => 'Tahun tidak masuk akal',
+                $harga === false => 'Harga satuan harus angka rupiah, mis. 1500000',
                 default => null,
             };
             if ($galat) {
@@ -102,6 +106,7 @@ class ImporTerpasang
                 'jenis_perlengkapan_id' => $j->id,
                 'jenis' => $j->namaPendek(),
                 'jumlah' => (int) $jumlah,
+                'harga_satuan' => $harga,
                 'lat' => round($lat, 7),
                 'lng' => round($lng, 7),
                 'alamat' => ($r['alamat'] ?? '') ?: null,
@@ -129,6 +134,7 @@ class ImporTerpasang
                 PerlengkapanTerpasang::create([
                     'jenis_perlengkapan_id' => $d['jenis_perlengkapan_id'],
                     'jumlah' => $d['jumlah'],
+                    'harga_satuan' => $d['harga_satuan'] ?? null,
                     'lat' => $d['lat'],
                     'lng' => $d['lng'],
                     'alamat' => $d['alamat'],
@@ -152,6 +158,21 @@ class ImporTerpasang
         LogPengaturan::catat("Impor perlengkapan terpasang dibatalkan ({$n} baris)");
 
         return $n;
+    }
+
+    /** "Rp 1.500.000", "1500000", "1.500.000,00" → 1500000; kosong → null; tidak terbaca/negatif → false. */
+    private static function rupiah(mixed $v): int|false|null
+    {
+        if ($v === null || (is_string($v) && trim($v) === '')) {
+            return null;
+        }
+        if (is_int($v) || is_float($v)) {
+            return $v < 0 ? false : (int) round($v);
+        }
+        $s = preg_replace('/^rp\.?/i', '', str_replace(' ', '', trim((string) $v)));
+        $s = preg_replace('/,\d{1,2}$/', '', $s);
+
+        return preg_match('/^(\d+|\d{1,3}(\.\d{3})+)$/', $s) ? (int) str_replace('.', '', $s) : false;
     }
 
     private static function kunci(string $s): string

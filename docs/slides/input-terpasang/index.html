@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Input Perlengkapan Terpasang · SIPERJAL</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #000100; --muted: #565b73; --line: #dfe2ee;
+    --accent: #4556a9; --accent-soft: #e9ecf7; --accent-deep: #1d2554;
+    --tanda: #e11d48; --ok: #0b7a4f; --ok-bg: #e3f4ec; --warn-bg: #fff4d6;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: #14172b; font-family: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif; color: var(--fg); overflow: hidden; }
+  /* Panggung 1280x720 yang diskalakan memenuhi layar */
+  #panggung { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center; }
+  .slide { position: absolute; inset: 0; background: var(--bg); display: none; padding: 56px 72px; overflow: hidden; }
+  .slide.aktif { display: flex; flex-direction: column; }
+  h1, h2 { font-family: 'Anton', 'Impact', 'Arial Narrow', sans-serif; font-weight: 400; letter-spacing: .5px; text-transform: uppercase; color: var(--accent-deep); }
+  h1 { font-size: 76px; line-height: 1.02; }
+  h2 { font-size: 46px; line-height: 1.05; }
+  .label { font: 700 15px/1 'Inter', sans-serif; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+  .sub { font-size: 22px; line-height: 1.45; color: var(--muted); margin-top: 14px; }
+  p, li { font-size: 22px; line-height: 1.45; }
+  b { font-weight: 700; }
+  .isi { flex: 1; display: flex; gap: 40px; margin-top: 26px; min-height: 0; }
+  .kiri { width: 400px; flex: none; display: flex; flex-direction: column; gap: 16px; }
+  .kanan { flex: 1; min-width: 0; display: flex; align-items: flex-start; justify-content: center; }
+  .kanan img { max-width: 100%; max-height: 100%; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 6px 24px #1d255422; }
+  .dua { display: flex; gap: 28px; align-items: flex-start; justify-content: center; height: 100%; }
+  .dua img { height: 100%; width: auto; max-width: 48%; object-fit: contain; }
+  .kartu { background: var(--accent-soft); border-radius: 12px; padding: 16px 20px; }
+  .kartu.ok { background: var(--ok-bg); }
+  .kartu.warn { background: var(--warn-bg); }
+  .kartu small { display: block; font: 700 13px/1 'Inter', sans-serif; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .no { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--tanda); color: #fff; font: 700 16px/1 'Inter', sans-serif; flex: none; }
+  .baris { display: flex; gap: 12px; align-items: flex-start; }
+  .baris span:last-child { font-size: 20px; line-height: 1.4; }
+  table { border-collapse: collapse; width: 100%; margin-top: 22px; }
+  th { text-align: left; font: 700 14px/1 'Inter', sans-serif; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 0 16px 10px; }
+  td { vertical-align: top; padding: 16px; border-top: 1px solid var(--line); font-size: 21px; line-height: 1.4; }
+  td:first-child { width: 44%; font-weight: 600; }
+  td .tag { display: inline-block; font: 700 13px/1 'Inter', sans-serif; letter-spacing: 1px; padding: 5px 8px; border-radius: 6px; vertical-align: 2px; margin-right: 6px; }
+  .tag.ok { background: var(--ok-bg); color: var(--ok); }
+  .tag.wajib { background: #fde2e8; color: var(--tanda); }
+  .tag.opsi { background: var(--accent-soft); color: var(--accent); }
+  .alur { display: flex; align-items: stretch; gap: 14px; margin-top: 34px; }
+  .alur .k { flex: 1; background: var(--accent-soft); border-radius: 14px; padding: 20px 20px 22px; position: relative; }
+  .alur .k b.n { display: block; font: 400 44px/1 'Anton', 'Impact', sans-serif; color: var(--accent); margin-bottom: 10px; }
+  .alur .k span { font-size: 20px; line-height: 1.35; display: block; }
+  .alur .k.akhir { background: var(--ok-bg); } .alur .k.akhir b.n { color: var(--ok); }
+  .panah { align-self: center; font-size: 28px; color: var(--muted); }
+  .tengah { justify-content: center; }
+  .cover { background: linear-gradient(135deg, #1d2554 0%, #4556a9 100%); color: #fff; justify-content: center; }
+  .cover h1 { color: #fff; } .cover .sub { color: #dfe4ff; max-width: 820px; font-size: 26px; }
+  .cover .label { color: #aab6ff; }
+  .cover .pil { margin-top: 40px; display: inline-flex; gap: 10px; font: 600 16px/1 'Inter', sans-serif; color: #dfe4ff; }
+  .cover .pil span { border: 1.5px solid #ffffff66; border-radius: 99px; padding: 8px 14px; }
+  .nav { position: fixed; left: 0; right: 0; bottom: 0; height: 4px; background: #ffffff22; z-index: 5; }
+  .nav i { display: block; height: 100%; background: #8c9cf5; width: 0; transition: width .2s; }
+  .hitung { position: fixed; right: 16px; bottom: 12px; font: 600 13px 'Inter', sans-serif; color: #ffffff99; z-index: 5; }
+  .petunjuk { position: fixed; left: 16px; bottom: 12px; font: 13px 'Inter', sans-serif; color: #ffffff77; z-index: 5; }
+  @media print {
+    html, body { overflow: visible; background: #fff; height: auto; }
+    #panggung { position: static; transform: none !important; width: auto; height: auto; }
+    .slide { display: flex !important; position: relative; width: 1280px; height: 720px; page-break-after: always; break-after: page; }
+    .nav, .hitung, .petunjuk { display: none; }
+    @page { size: 1280px 720px; margin: 0; }
+  }
+</style>
+</head>
+<body>
+<style>
+  .xl { border-collapse: collapse; width: 100%; margin-top: 22px; font: 15px/1.3 'Inter', ui-sans-serif, sans-serif; }
+  .xl th, .xl td { border: 1px solid #c9ccd6; padding: 8px 10px; font-size: 15px; line-height: 1.3; width: auto; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg); vertical-align: middle; }
+  .xl td:first-child { width: auto; font-weight: 400; }
+  .xl .kol th { background: #eef0f4; color: var(--muted); text-align: center; font-size: 13px; padding: 4px; }
+  .xl .kepala td { background: #e3f4ec; font-weight: 700; }
+  .xl .kepala td.wajib { background: #fde2e8; color: var(--tanda); }
+  .xl td.no { background: #eef0f4; color: var(--muted); text-align: center; width: 34px; font-size: 13px; }
+  .xl td.angka { text-align: right; font-variant-numeric: tabular-nums; }
+  .tabsheet { display: flex; gap: 2px; align-items: center; margin-top: -1px; font: 600 14px/1 'Inter', sans-serif; }
+  .tabsheet span { padding: 7px 14px; background: #eef0f4; color: var(--muted); border: 1px solid #c9ccd6; border-top: none; border-radius: 0 0 6px 6px; }
+  .tabsheet span.on { background: #fff; color: #0b7a4f; }
+  .tabsheet em { font-style: normal; font-weight: 500; color: var(--tanda); margin-left: 10px; }
+  .legenda { display: flex; gap: 22px; margin-top: 18px; font-size: 18px; color: var(--muted); align-items: center; }
+  .legenda i { display: inline-block; width: 16px; height: 16px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; }
+</style>
+<div id="panggung">
+
+  <!-- 1 · Sampul -->
+  <section class="slide cover">
+    <div class="label">SIPERJAL · Perlengkapan terpasang</div>
+    <h1>Cara memasukkan<br>perlengkapan lama</h1>
+    <p class="sub">Untuk rambu, PJU, guardrail, dan perlengkapan lain yang sudah terpasang <b>sebelum ada SIPERJAL</b>, tanpa perlu membuat usulan.</p>
+    <div class="pil"><span>2 cara</span><span>Per lokasi / Impor Excel</span><span>Jumlah unit &amp; harga</span><span>Akun Dishub</span></div>
+  </section>
+
+  <!-- 2 · Gambaran -->
+  <section class="slide tengah">
+    <div class="label">Gambaran singkat</div>
+    <h2>Cukup dimasukkan, tidak perlu lewat usulan</h2>
+    <p class="sub">Data lama dicatat langsung di menu <b>Terpasang</b>. Pilih cara yang paling cocok:</p>
+    <div class="alur">
+      <div class="k"><b class="n">A</b><span><b>Tambah per lokasi</b><br>Klik titik di peta, lalu isi beberapa jenis sekaligus (jumlah + harga), seperti usulan.</span></div>
+      <div class="k"><b class="n">B</b><span><b>Impor dari Excel</b><br>Isi template, unggah, cek pratinjau, simpan. Cocok untuk puluhan sampai ribuan data.</span></div>
+      <div class="k akhir"><b class="n">✓</b><span><b>Hasilnya sama</b><br>Tampil di peta beranda dan bisa dilaporkan rusak oleh masyarakat.</span></div>
+    </div>
+  </section>
+
+  <!-- 3 · Langkah 1 -->
+  <section class="slide">
+    <div class="label">Langkah 1</div>
+    <h2>Buka menu Terpasang</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="baris"><span class="no">1</span><span>Masuk dengan akun <b>Dishub</b>. Di atas daftar ada pilihan <b>Usulan · Pemeliharaan · Terpasang</b>. Klik <b>Terpasang</b>.</span></div>
+        <div class="kartu warn"><small>Penting</small><p style="font-size:19px">Akun <b>admin</b> hanya bisa melihat daftar ini. Tombol Tambah dan Impor tidak muncul.</p></div>
+      </div>
+      <div class="kanan"><img src="img/01-buka-terpasang.png" alt="Pilihan Terpasang di atas daftar"></div>
+    </div>
+  </section>
+
+  <!-- 4 · Langkah 2 -->
+  <section class="slide">
+    <div class="label">Langkah 2</div>
+    <h2>Pilih cara: Tambah atau Impor</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="baris"><span class="no">1</span><span><b>Tambah</b>: memasukkan perlengkapan di satu lokasi, boleh beberapa jenis (cara A).</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Impor Excel</b>: memasukkan banyak sekaligus (cara B).</span></div>
+        <div class="kartu"><small>Daftar ini berisi</small><p style="font-size:19px">Semua perlengkapan terpasang: yang <b>dari usulan</b> SIPERJAL dan yang <b>sebelum SIPERJAL</b>. Saringan di kanan atas memisahkannya.</p></div>
+      </div>
+      <div class="kanan"><img src="img/02-halaman-terpasang.png" alt="Halaman Perlengkapan terpasang"></div>
+    </div>
+  </section>
+
+  <!-- 5 · Cara A -->
+  <section class="slide">
+    <div class="label">Cara A · Tambah per lokasi</div>
+    <h2>Satu lokasi, beberapa jenis</h2>
+    <div class="isi">
+      <div class="kiri" style="width:560px;gap:10px">
+        <div class="baris"><span class="no">1</span><span><b>Klik lokasinya di peta</b>. Kecamatan &amp; desa terisi sendiri.</span></div>
+        <div class="baris"><span class="no">2</span><span>Per baris: <b>Perlengkapan</b>, <b>Jumlah</b> (unit/titik/meter), dan <b>Harga satuan</b>. Harga boleh kosong.</span></div>
+        <div class="baris"><span class="no">3</span><span>Ada jenis lain di titik yang sama? Klik <b>Tambah jenis lain di lokasi ini</b>. Ikon × menghapus baris.</span></div>
+        <div class="baris"><span class="no">4</span><span>Jenisnya tidak ada di dropdown? Klik <b>Minta admin menambahkan</b> (lihat slide 9).</span></div>
+        <div class="baris"><span class="no">5</span><span><b>Alamat / patokan</b>, lalu Tahun pasang &amp; Catatan bila tahu.</span></div>
+        <div class="baris"><span class="no">6</span><span>Klik <b>Simpan</b>.</span></div>
+        <div class="kartu"><small>Harga SSH</small><p style="font-size:18px">Di bawah tiap baris tampil harga SSH sekarang sebagai <b>saran</b>. Tidak dipakai otomatis, karena harga waktu pasang bisa berbeda.</p></div>
+      </div>
+      <div class="kanan"><img src="img/03-isi-form.png" alt="Form Tambah dengan beberapa jenis"></div>
+    </div>
+  </section>
+
+  <!-- 6 · Cara A hasil -->
+  <section class="slide">
+    <div class="label">Cara A · hasil</div>
+    <h2>Satu baris per jenis, dengan nilainya</h2>
+    <div class="isi" style="flex-direction:column;gap:22px">
+      <div class="kanan" style="flex:none;max-height:390px"><img src="img/04-tersimpan.png" alt="Perlengkapan baru di daftar"></div>
+      <div style="display:flex;gap:16px">
+        <div class="kartu ok" style="flex:1"><small>Nilai</small><p style="font-size:19px">Jumlah × harga tampil di tiap baris; total <b>nilai tercatat</b> di bagian atas. Tanpa harga = tidak dihitung.</p></div>
+        <div class="kartu" style="flex:1"><small>Salah isi?</small><p style="font-size:19px">Klik ikon <b>pensil</b> untuk mengubah, ikon <b>tempat sampah</b> untuk menghapus.</p></div>
+        <div class="kartu warn" style="flex:1"><small>Tidak bisa dihapus</small><p style="font-size:19px">bila sudah ada laporan kerusakan pada perlengkapan itu.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · Cara B dialog -->
+  <section class="slide">
+    <div class="label">Cara B · Impor Excel</div>
+    <h2>Unduh template, lalu unggah</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="baris"><span class="no">1</span><span>Klik <b>Unduh template</b>. Isinya 2 sheet: <b>Data</b> (diisi) dan <b>Daftar perlengkapan</b> (contekan nama).</span></div>
+        <div class="baris"><span class="no">2</span><span>Setelah diisi, klik kotak ini untuk memilih berkas <b>.xlsx</b> atau <b>.csv</b>.</span></div>
+        <div class="baris"><span class="no">3</span><span>Jenisnya belum ada? <b>Minta admin menambahkan</b>.</span></div>
+        <div class="kartu"><small>Batas</small><p style="font-size:19px">Sampai <b>2.000 baris</b> per berkas. Lebih dari itu, pecah jadi beberapa berkas.</p></div>
+      </div>
+      <div class="kanan"><img src="img/05-dialog-impor.png" alt="Dialog Impor dari Excel"></div>
+    </div>
+  </section>
+
+  <!-- 8 · Cara B isi Excel -->
+  <section class="slide">
+    <div class="label">Cara B · mengisi template</div>
+    <h2>Satu baris = satu jenis di satu titik</h2>
+    <table class="xl">
+      <tr class="kol"><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th><th>J</th></tr>
+      <tr class="kepala"><td class="no">1</td><td class="wajib">Perlengkapan</td><td>Jumlah</td><td>Harga satuan</td><td class="wajib">Latitude</td><td class="wajib">Longitude</td><td>Alamat</td><td>Kecamatan</td><td>Desa</td><td>Tahun</td><td>Catatan</td></tr>
+      <tr><td class="no">2</td><td>Lampu penerangan jalan</td><td class="angka">6</td><td class="angka">9500000</td><td class="angka">-3.4521</td><td class="angka">116.0012</td><td>Jl. Raya Batulicin km 2</td><td>Batulicin</td><td>Batulicin</td><td class="angka">2018</td><td>PJU tiang tunggal</td></tr>
+      <tr><td class="no">3</td><td>Pagar pengaman (guardrail)</td><td class="angka">40</td><td class="angka">650000</td><td class="angka">-3.4302</td><td class="angka">115.9948</td><td>Tikungan Gunung Tinggi</td><td>Batulicin</td><td>Gunung Tinggi</td><td class="angka">2020</td><td>satuan meter</td></tr>
+      <tr><td class="no">4</td><td>Patok tikungan (delineator)</td><td class="angka">12</td><td class="angka"></td><td class="angka">-3.4610</td><td class="angka">116.0105</td><td>Jl. Transmigrasi</td><td></td><td></td><td class="angka">2021</td><td></td></tr>
+    </table>
+    <div class="tabsheet"><span class="on">Data</span><span>Daftar perlengkapan</span><em>← nama jenis tinggal disalin dari sheet ini</em></div>
+    <div class="legenda"><span><i style="background:#fde2e8"></i>Wajib diisi</span><span><i style="background:#e3f4ec"></i>Boleh kosong (jumlah kosong = 1, harga kosong = tanpa nilai)</span><span>Harga boleh ditulis “Rp 1.500.000”</span></div>
+    <div style="display:flex;gap:16px;margin-top:20px">
+      <div class="kartu ok" style="flex:1"><small>Nama perlengkapan</small><p style="font-size:18px">Salin dari sheet <b>Daftar perlengkapan</b> (ada satuan &amp; harga SSH-nya), tempel ke kolom A sheet <b>Data</b>.</p></div>
+      <div class="kartu" style="flex:1"><small>Koordinat dari Google Maps</small><p style="font-size:18px">Klik kanan titik di Google Maps (di HP: tekan lama), angka pertama = Latitude, kedua = Longitude.</p></div>
+      <div class="kartu" style="flex:1"><small>Kecamatan &amp; Desa</small><p style="font-size:18px">Tulis namanya seperti di aplikasi. Boleh dikosongkan dan dilengkapi nanti lewat ikon pensil.</p></div>
+    </div>
+  </section>
+
+  <!-- 8b · Minta admin -->
+  <section class="slide">
+    <div class="label">Jenis belum ada di daftar?</div>
+    <h2>Minta admin menambahkan</h2>
+    <div class="isi">
+      <div class="kiri" style="width:500px">
+        <div class="baris"><span class="no">1</span><span>Klik <b>Minta admin menambahkan</b> (ada di form Tambah dan dialog Impor). Tulis <b>nama jenis</b>-nya.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Satuan</b> (unit/titik/meter) dan catatan boleh diisi agar admin langsung paham.</span></div>
+        <div class="baris"><span class="no">3</span><span>Klik <b>Kirim ke admin</b>. Isi form yang sedang dikerjakan tidak hilang.</span></div>
+        <div class="kartu"><small>Di sisi admin</small><p style="font-size:18px">Kabar masuk ke lonceng &amp; email, tombol <b>Tambahkan</b> membuka Pengaturan → Perlengkapan. Caranya ada di 2 slide berikut.</p></div>
+      </div>
+      <div class="kanan"><img src="img/09-minta-admin.png" alt="Dialog Minta jenis baru"></div>
+    </div>
+  </section>
+
+  <!-- 8c · Admin: buka Pengaturan -->
+  <section class="slide">
+    <div class="label">Untuk akun admin · 1 dari 2</div>
+    <h2>Menambah jenis: Pengaturan → Perlengkapan</h2>
+    <div class="isi">
+      <div class="kiri" style="width:420px;gap:12px">
+        <div class="baris"><span class="no">1</span><span>Klik menu <b>Pengaturan</b> di bar atas (hanya ada di akun admin).</span></div>
+        <div class="baris"><span class="no">2</span><span>Pilih tab <b>Perlengkapan</b>: daftar semua jenis beserta satuan &amp; harga SSH.</span></div>
+        <div class="baris"><span class="no">3</span><span>Klik <b>Tambah Jenis</b>.</span></div>
+        <div class="kartu" style="display:flex;flex-direction:column;gap:10px"><small style="margin:0">Jalan pintas</small><p style="font-size:16px">Ada permintaan dari Dishub? Klik kabarnya di <b>lonceng</b> → <b>Tambahkan</b>, halaman ini langsung terbuka.</p><img src="img/10-admin-lonceng.png" alt="Kabar permintaan di lonceng admin" style="width:100%;border-radius:8px;border:1px solid var(--line)"></div>
+      </div>
+      <div class="kanan"><img src="img/11-admin-pengaturan.png" alt="Pengaturan tab Perlengkapan"></div>
+    </div>
+  </section>
+
+  <!-- 8d · Admin: isi jenis -->
+  <section class="slide">
+    <div class="label">Untuk akun admin · 2 dari 2</div>
+    <h2>Isi jenis baru, lalu Simpan</h2>
+    <div class="isi">
+      <div class="kiri" style="width:560px;gap:12px">
+        <div class="baris"><span class="no">1</span><span><b>Nama</b>: nama inilah yang muncul di dropdown dan dipakai di kolom Perlengkapan Excel.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Satuan</b>: unit, titik, meter, set, atau lokasi.</span></div>
+        <div class="baris"><span class="no">3</span><span><b>Harga satuan (Rp)</b>: harga SSH tahun ini, untuk estimasi usulan &amp; saran harga.</span></div>
+        <div class="baris"><span class="no">4</span><span>Klik <b>Simpan</b>. Jenis langsung bisa dipilih Dishub, juga muncul di sheet <b>Daftar perlengkapan</b> template.</span></div>
+        <div class="kartu ok"><small>Ubah atau sembunyikan</small><p style="font-size:17px">Nama, satuan, dan harga bisa diubah langsung di tabel (tersimpan otomatis). Matikan <b>Aktif</b> agar jenis tidak bisa diusulkan lagi; data terpasang lama tetap aman.</p></div>
+      </div>
+      <div class="kanan"><img src="img/12-admin-tambah-jenis.png" alt="Dialog Tambah jenis perlengkapan"></div>
+    </div>
+  </section>
+
+  <!-- 9 · Cara B pratinjau -->
+  <section class="slide">
+    <div class="label">Cara B · pratinjau</div>
+    <h2>Periksa dulu sebelum disimpan</h2>
+    <div class="isi">
+      <div class="kiri" style="width:520px">
+        <div class="baris"><span class="no">1</span><span>Ringkasan: <b>siap diimpor</b>, <b>dilewati</b> (sudah tercatat di titik yang sama), dan <b>bermasalah</b>.</span></div>
+        <div class="baris"><span class="no">2</span><span>Daftar baris yang dilewati atau bermasalah beserta alasannya. Nomor baris sama dengan nomor baris di Excel.</span></div>
+        <div class="baris"><span class="no">3</span><span>Klik <b>Simpan</b>. Hanya baris yang siap yang disimpan.</span></div>
+        <div class="kartu warn"><small>Ada yang bermasalah?</small><p style="font-size:18px">Perbaiki baris itu di Excel lalu unggah lagi. Baris yang sudah masuk otomatis <b>dilewati</b>, jadi tidak dobel.</p></div>
+      </div>
+      <div class="kanan"><img src="img/06-pratinjau.png" alt="Pratinjau impor"></div>
+    </div>
+  </section>
+
+  <!-- 10 · Cara B hasil -->
+  <section class="slide">
+    <div class="label">Cara B · hasil</div>
+    <h2>Tersimpan, dan bisa diurungkan</h2>
+    <div class="isi">
+      <div class="kiri" style="width:360px">
+        <div class="baris"><span class="no">1</span><span>Muncul pesan <b>“4 perlengkapan diimpor”</b>. Semua data baru langsung ada di daftar.</span></div>
+        <div class="kartu warn"><small>Salah berkas?</small><p style="font-size:19px">Klik <b>Urungkan</b> di pesan itu. Seluruh hasil impor tadi dihapus lagi.</p></div>
+      </div>
+      <div class="kanan"><img src="img/07-hasil-impor.png" alt="Hasil impor dengan tombol Urungkan"></div>
+    </div>
+  </section>
+
+  <!-- 11 · Beranda -->
+  <section class="slide">
+    <div class="label">Setelah tersimpan</div>
+    <h2>Tampil di peta beranda</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="baris"><span class="no">1</span><span>Setiap perlengkapan muncul sebagai pin di peta halaman depan.</span></div>
+        <div class="baris"><span class="no">2</span><span>Masyarakat bisa klik pin lalu <b>Laporkan rusak</b>. Laporan masuk ke menu Pemeliharaan.</span></div>
+        <div class="kartu ok"><small>Manfaat</small><p style="font-size:19px">Saat ada usulan baru di dekat perlengkapan yang sudah ada, form usulan ikut menampilkannya, sehingga usulan dobel bisa dihindari.</p></div>
+      </div>
+      <div class="kanan"><img src="img/08-beranda.png" alt="Pin perlengkapan lama di peta beranda"></div>
+    </div>
+  </section>
+
+  <!-- 12 · Penutup -->
+  <section class="slide tengah">
+    <div class="label">Ringkasnya</div>
+    <h2>Yang perlu diingat</h2>
+    <div class="alur" style="margin-top:40px">
+      <div class="k"><b class="n">1</b><span>Menu <b>Terpasang</b>, pakai akun <b>Dishub</b>.</span></div>
+      <div class="k"><b class="n">2</b><span>Sedikit data: <b>Tambah</b> (beberapa jenis per lokasi). Banyak data: <b>Impor Excel</b>.</span></div>
+      <div class="k"><b class="n">3</b><span>Wajib: <b>jenis perlengkapan + titik</b> (peta atau Latitude/Longitude).</span></div>
+      <div class="k akhir"><b class="n">✓</b><span>Harga satuan opsional. Langsung tampil di peta dan bisa dilaporkan rusak.</span></div>
+    </div>
+  </section>
+
+</div>
+<div class="nav"><i id="bar"></i></div>
+<div class="petunjuk">← → pindah slide · F layar penuh · cetak (Ctrl/Cmd+P) untuk simpan PDF</div>
+<div class="hitung" id="hitung"></div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  const panggung = document.getElementById('panggung');
+  let i = Math.max(0, Math.min(slides.length - 1, (parseInt(location.hash.slice(1)) || 1) - 1));
+  function tampil(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('aktif', k === i));
+    document.getElementById('bar').style.width = ((i + 1) / slides.length * 100) + '%';
+    document.getElementById('hitung').textContent = (i + 1) + ' / ' + slides.length;
+    history.replaceState(null, '', '#' + (i + 1));
+  }
+  function skala() {
+    const s = Math.min(innerWidth / 1280, innerHeight / 720);
+    panggung.style.transform = `translate(-50%, -50%) scale(${s})`;
+  }
+  addEventListener('resize', skala);
+  addEventListener('keydown', e => {
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); tampil(i + 1); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); tampil(i - 1); }
+    else if (e.key === 'Home') tampil(0);
+    else if (e.key === 'End') tampil(slides.length - 1);
+    else if (e.key === 'f' || e.key === 'F') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
+  });
+  addEventListener('click', e => { if (e.clientX > innerWidth / 2) tampil(i + 1); else tampil(i - 1); });
+  skala(); tampil(i);
+</script>
+</body>
+</html>

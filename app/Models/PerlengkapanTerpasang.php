@@ -17,7 +17,13 @@ class PerlengkapanTerpasang extends Model
 
     protected function casts(): array
     {
-        return ['terpasang_at' => 'date', 'lat' => 'float', 'lng' => 'float'];
+        return ['terpasang_at' => 'date', 'lat' => 'float', 'lng' => 'float', 'harga_satuan' => 'integer'];
+    }
+
+    /** Nilai aset (jumlah × harga satuan); null bila harga belum diisi. */
+    public function nilai(): ?int
+    {
+        return $this->harga_satuan === null ? null : $this->jumlah * $this->harga_satuan;
     }
 
     public function jenis()

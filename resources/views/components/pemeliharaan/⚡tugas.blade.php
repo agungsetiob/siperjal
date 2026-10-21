@@ -17,6 +17,7 @@ new class extends Component
     use WithFileUploads;
 
     public string $tab = 'ditugaskan'; // tab halaman: ditugaskan (perlu dicek) | perbaikan
+    public bool $tanpaPeta = false; // dipasang di panel detail (desktop/daftar HP): hanya sheet Cek Kondisi / Selesai Diperbaiki
     public ?string $sheet = null; // cek, selesai
     public ?int $laporanSheet = null;
     public ?int $noTitik = null;
@@ -72,9 +73,23 @@ new class extends Component
         unset($this->laporan);
     }
 
+    /** Tombol Cek Kondisi / Tandai Selesai di panel detail membuka sheet yang sama dengan peta lapangan. */
+    #[On('buka-tugas')]
+    public function bukaDariDetail(int $id): void
+    {
+        if ($this->tanpaPeta) {
+            $this->buka($id);
+        }
+    }
+
     public function tutup(): void
     {
         $this->reset('sheet', 'laporanSheet', 'noTitik', 'foto', 'fotoKoordinat', 'catatan', 'alasan');
+    }
+
+    public function updatedFoto(): void
+    {
+        $this->resetValidation('foto');
     }
 
     public function hapusFoto(int $n): void
@@ -105,7 +120,7 @@ new class extends Component
         unset($this->daftar, $this->titik);
         $this->dispatch('tugas-berubah', titik: $this->titik);
         $this->dispatch('toast', pesan: $rusak ? 'Disetujui · masuk antrean perbaikan' : 'Laporan ditolak · pelapor dikabari');
-        $this->dispatch('laporan-diproses');
+        $this->dispatch('laporan-diproses', lanjut: $this->tanpaPeta);
     }
 
     public function selesai(): void
@@ -117,8 +132,14 @@ new class extends Component
 
         $l->selesai($this->fotoTerunggah(), trim($this->catatan));
         $this->tutup();
-        $this->hasil = $l->id;
         unset($this->daftar, $this->titik);
+        if ($this->tanpaPeta) { // panel detail: toast Urungkan seperti sebelumnya, lalu lanjut ke laporan berikutnya
+            $this->dispatch('toast', pesan: 'Selesai diperbaiki · pelapor dikabari', urungkan: 'lpr-selesai:'.$l->id);
+            $this->dispatch('laporan-diproses', lanjut: true);
+
+            return;
+        }
+        $this->hasil = $l->id;
         $this->dispatch('tugas-berubah', titik: $this->titik);
         $this->dispatch('laporan-diproses');
     }
@@ -135,12 +156,15 @@ new class extends Component
 
 @php
     $hasilL = $hasil ? \App\Models\LaporanKerusakan::with('jenis', 'kecamatan', 'desa', 'foto')->find($hasil) : null;
-    $no = collect($this->titik)->pluck('no', 'id');
+    $no = $tanpaPeta ? collect() : collect($this->titik)->pluck('no', 'id');
 @endphp
 
-<div class="relative flex h-full min-h-0 flex-1 flex-col bg-bg"
-     x-data="petaTugas(@js(config('usuljalan.peta_awal')))"
-     @tugas-berubah.window="perbarui($event.detail.titik)">
+<div @class(['relative flex h-full min-h-0 flex-1 flex-col bg-bg' => ! $tanpaPeta])>
+    @unless ($tanpaPeta)
+
+    <div class="contents"
+         x-data="petaTugas(@js(config('usuljalan.peta_awal')))"
+         @tugas-berubah.window="perbarui($event.detail.titik)">
     {{-- data awal di luar x-data: atribut x-data yang berubah membuat Alpine memasang ulang peta --}}
     <script type="application/json" x-ref="awal" wire:ignore>@json($this->titik)</script>
     {{-- Peta --}}
@@ -236,11 +260,13 @@ new class extends Component
             </button>
         </div>
     @endif
+    </div>
+    @endunless
 
     {{-- Sheet Cek Kondisi / Selesai Diperbaiki --}}
     @if ($sheet && $this->laporan)
         @php $sl = $this->laporan; $fp = $sl->fotoJenis('pelapor')->first(); @endphp
-        <div class="fixed inset-0 z-[3000] flex flex-col justify-end bg-fg/55" wire:click.self="tutup"
+        <div class="fixed inset-0 z-[3000] flex flex-col justify-end bg-fg/55 sm:items-center sm:justify-center sm:p-4" wire:click.self="tutup"
              x-data="{
                 mengunggah: false,
                 gps: null,
@@ -265,7 +291,7 @@ new class extends Component
                     e.target.value = '';
                 },
              }">
-            <div class="flex max-h-[92dvh] flex-col overflow-y-auto rounded-t-xl bg-bg shadow-xl">
+            <div class="flex max-h-[92dvh] w-full flex-col overflow-y-auto rounded-t-xl bg-bg shadow-xl sm:max-w-md sm:rounded-md">
                 <div class="flex justify-center pb-1 pt-2"><span class="h-[5px] w-9 rounded-[3px] bg-line"></span></div>
                 <div class="flex gap-3 px-4 pb-4 pt-2">
                     <div class="flex min-w-0 flex-1 flex-col gap-1">
