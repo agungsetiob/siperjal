@@ -77,7 +77,7 @@
                         </div>
                     @endforeach
                 </div>
-                <div class="mt-12 border-t border-fg-inverse/[.12] pt-6 font-caption text-[13px] text-[#9CA3AF]">© {{ date('Y') }} Dinas Perhubungan & Bappeda. Hak cipta dilindungi.</div>
+                <div class="mt-12 border-t border-fg-inverse/[.12] pt-6 font-caption text-[13px] text-[#9CA3AF]">© {{ date('Y') }} Dinas Perhubungan. Hak cipta dilindungi.</div>
             </div>
         </footer>
     @elseif ($footer === 'ringkas')
@@ -87,7 +87,7 @@
                     <x-logo terang kecil />
                     <x-logo-instansi terang />
                 </div>
-                <span class="font-caption text-[13px] text-fg-inverse/70">Dikelola Dinas Perhubungan bersama Bappeda · © {{ date('Y') }}</span>
+                <span class="font-caption text-[13px] text-fg-inverse/70">Dikelola Dinas Perhubungan · © {{ date('Y') }}</span>
             </div>
         </footer>
     @endif
