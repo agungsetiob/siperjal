@@ -251,8 +251,18 @@ new #[Layout('layouts.app')] class extends Component
     {
         $u = User::findOrFail($id);
         abort_if($u->id === auth()->id(), 422);
-        abort_unless($baru = Role::tryFrom($role), 422);
-        $this->ubah($u, 'role', $baru, "Peran {$u->name}: {$u->role->label()} → ".$baru->label());
+        $pilihan = User::pilihanPeran();
+        abort_unless(isset($pilihan[$role]), 422);
+        // dishub_lapangan = Dishub petugas lapangan (hanya melihat tugas pemeliharaannya)
+        $lapangan = $role === 'dishub_lapangan';
+        $baru = Role::from($lapangan ? Role::Dishub->value : $role);
+        $keterangan = "Peran {$u->name}: {$pilihan[$u->peranPengaturan()]} → {$pilihan[$role]}";
+        if ($u->role === $baru) {
+            $this->ubah($u, 'petugas_lapangan', $lapangan, $keterangan);
+        } else {
+            $u->petugas_lapangan = $lapangan;
+            $this->ubah($u, 'role', $baru, $keterangan);
+        }
     }
 
     public function ubahPengguna(int $id, string $kolom, $nilai): void
@@ -350,7 +360,7 @@ new #[Layout('layouts.app')] class extends Component
     public function simpanDialog(): void
     {
         $aturan = match ($this->dialog) {
-            'pengguna' => ['form.name' => 'required|max:100', 'form.email' => 'required|email|unique:users,email', 'form.no_hp' => 'nullable|max:20', 'form.role' => 'required|in:pengusul,dishub,bappeda,admin', 'form.instansi_id' => 'nullable|exists:instansi,id'],
+            'pengguna' => ['form.name' => 'required|max:100', 'form.email' => 'required|email|unique:users,email', 'form.no_hp' => 'nullable|max:20', 'form.role' => 'required|in:'.implode(',', array_keys(User::pilihanPeran())), 'form.instansi_id' => 'nullable|exists:instansi,id'],
             'instansi' => ['form.nama' => 'required|max:150', 'form.jenis' => 'required|in:'.implode(',', array_keys(Instansi::JENIS)), 'form.kecamatan_id' => 'nullable|exists:kecamatan,id'],
             'jenis' => ['form.nama' => 'required|max:100', 'form.deskripsi' => 'nullable|max:150', 'form.ikon' => ['required', 'max:50', self::ikonAda()], 'form.satuan' => 'required|max:20', 'form.harga_satuan' => 'required|integer|min:0', 'form.warna' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/']],
             'ruas' => ['form.nama' => 'required|max:150', 'form.status' => 'nullable|in:'.implode(',', array_keys(self::STATUS_RUAS)), 'form.kewenangan' => 'nullable|in:'.implode(',', array_keys(self::KEWENANGAN_RUAS))],
@@ -358,7 +368,7 @@ new #[Layout('layouts.app')] class extends Component
         $data = array_map(fn ($v) => $v === '' ? null : $v, $this->validate($aturan)['form']);
 
         match ($this->dialog) {
-            'pengguna' => User::create($data + ['email_verified_at' => now()]),
+            'pengguna' => User::create(['role' => $data['role'] === 'dishub_lapangan' ? Role::Dishub : $data['role'], 'petugas_lapangan' => $data['role'] === 'dishub_lapangan'] + $data + ['email_verified_at' => now()]),
             'instansi' => Instansi::create($data),
             'jenis' => JenisPerlengkapan::create($data + ['urutan' => JenisPerlengkapan::max('urutan') + 1]),
             'ruas' => RuasJalan::create($data),
@@ -497,7 +507,7 @@ new #[Layout('layouts.app')] class extends Component
                 <div class="overflow-x-auto rounded-md outline outline-1 -outline-offset-1 outline-line">
                     <div class="min-w-[760px]">
                         <div class="flex gap-5 border-b border-line bg-surface-muted px-5 py-3 {{ $th }}">
-                            <span class="flex-1">Nama</span><span class="w-[150px]">Peran</span><span class="w-[180px]">Instansi</span><span class="w-[130px]">No. HP</span><span class="w-[60px]">Aktif</span>
+                            <span class="flex-1">Nama</span><span class="w-[220px]">Peran</span><span class="w-[180px]">Instansi</span><span class="w-[130px]">No. HP</span><span class="w-[60px]">Aktif</span>
                         </div>
                         @foreach ($this->pengguna as $p)
                             @php $saya = $p->id === auth()->id(); @endphp
@@ -512,8 +522,8 @@ new #[Layout('layouts.app')] class extends Component
                                         <input type="email" value="{{ $p->email }}" @change="$wire.ubahPengguna({{ $p->id }}, 'email', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Email" class="{{ $isi }} w-full py-1 font-caption text-[13px] text-fg-muted">
                                     </div>
                                 </div>
-                                <select @disabled($saya) wire:change="ubahPeran({{ $p->id }}, $event.target.value)" class="w-[150px] {{ $sel }}">
-                                    @foreach (Role::cases() as $r) <option value="{{ $r->value }}" @selected($p->role === $r)>{{ $r->label() }}</option> @endforeach
+                                <select @disabled($saya) wire:change="ubahPeran({{ $p->id }}, $event.target.value)" class="w-[220px] {{ $sel }}">
+                                    @foreach (User::pilihanPeran() as $nilai => $label) <option value="{{ $nilai }}" @selected($p->peranPengaturan() === $nilai)>{{ $label }}</option> @endforeach
                                 </select>
                                 <select wire:change="ubahPengguna({{ $p->id }}, 'instansi_id', $event.target.value)" aria-label="Instansi" class="w-[180px] {{ $sel }}">
                                     <option value="">{{ $p->isPengusul() ? 'Masyarakat' : '—' }}</option>
@@ -704,7 +714,7 @@ new #[Layout('layouts.app')] class extends Component
                 <h3 class="judul text-2xl">{{ ['pengguna' => 'Tambah pengguna', 'instansi' => 'Tambah instansi', 'jenis' => 'Tambah jenis perlengkapan', 'ruas' => 'Tambah ruas jalan'][$dialog] }}</h3>
                 @php
                     $isian = match ($dialog) {
-                        'pengguna' => [['name', 'Nama', 'text'], ['email', 'Email', 'email'], ['no_hp', 'No. HP', 'tel'], ['role', 'Peran', collect(Role::cases())->mapWithKeys(fn ($r) => [$r->value => $r->label()])->all()], ['instansi_id', 'Instansi (khusus pengusul instansi)', ['' => '— Masyarakat / tidak ada —'] + $semuaInstansi->pluck('nama', 'id')->all()]],
+                        'pengguna' => [['name', 'Nama', 'text'], ['email', 'Email', 'email'], ['no_hp', 'No. HP', 'tel'], ['role', 'Peran', User::pilihanPeran()], ['instansi_id', 'Instansi (khusus pengusul instansi)', ['' => '— Masyarakat / tidak ada —'] + $semuaInstansi->pluck('nama', 'id')->all()]],
                         'instansi' => [['nama', 'Nama instansi', 'text'], ['jenis', 'Jenis', Instansi::JENIS], ['kecamatan_id', 'Kecamatan', ['' => '—'] + $semuaKecamatan->pluck('nama', 'id')->all()]],
                         'jenis' => [['nama', 'Nama', 'text'], ['deskripsi', 'Keterangan singkat', 'text'], ['satuan', 'Satuan', 'text'], ['harga_satuan', 'Harga satuan (Rp)', 'number'], ['ikon', 'Ikon (nama dari lucide.dev)', 'text'], ['warna', 'Warna pin', 'color']],
                         'ruas' => [['nama', 'Nama ruas', 'text'], ['status', 'Status', ['' => '—'] + $this::STATUS_RUAS], ['kewenangan', 'Kewenangan', $this::KEWENANGAN_RUAS]],

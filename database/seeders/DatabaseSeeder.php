@@ -51,7 +51,7 @@ class DatabaseSeeder extends Seeder
 
         User::create(['name' => 'Admin SIPERJAL', 'email' => 'admin@usuljalan.test', 'role' => Role::Admin, 'password' => 'password']);
         User::create(['name' => 'Rina Dishub', 'email' => 'dishub@usuljalan.test', 'role' => Role::Dishub, 'jabatan' => 'Pemeriksa', 'no_hp' => '081200000003']);
-        User::create(['name' => 'Ahmad Fauzi', 'email' => 'petugas@usuljalan.test', 'role' => Role::Dishub, 'jabatan' => 'Petugas lapangan', 'no_hp' => '081200000005']);
+        User::create(['name' => 'Ahmad Fauzi', 'email' => 'petugas@usuljalan.test', 'role' => Role::Dishub, 'petugas_lapangan' => true, 'jabatan' => 'Petugas lapangan', 'no_hp' => '081200000005']);
         User::create(['name' => 'Bima Bappeda', 'email' => 'bappeda@usuljalan.test', 'role' => Role::Bappeda, 'jabatan' => 'Perencana Anggaran', 'no_hp' => '081200000004']);
         User::create(['name' => 'Sekdes Kersik Putih', 'email' => 'desa@usuljalan.test', 'role' => Role::Pengusul, 'instansi_id' => $desaKersik->id, 'no_hp' => '081200000001']);
         User::create(['name' => 'Budi Santoso', 'email' => 'warga@usuljalan.test', 'role' => Role::Pengusul, 'no_hp' => '081200000002']);

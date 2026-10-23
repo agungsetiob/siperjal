@@ -6,7 +6,7 @@ urutan: 2
 layar: [pengaturan-pengguna]
 durasi: 3 menit
 perangkat: Desktop
-diperbarui: 2026-10-06
+diperbarui: 2026-10-22
 ---
 Warga mendaftar sendiri dengan kode email. Akun petugas dan akun instansi dibuat oleh Admin. Aplikasi tidak memakai kata sandi, jadi tidak ada yang perlu diatur ulang.
 
@@ -18,13 +18,13 @@ Buka **Pengaturan**, tab **Pengguna**, lalu klik **Tambah Pengguna**. Isi **Nama
 src: ../gambar/admin-dialog-pengguna.png
 keterangan: Jendela Tambah pengguna
 penanda:
-  - [59.7, 54.2, "Peran: Pengusul, Dishub, Bappeda, atau Admin."]
+  - [59.7, 54.2, "Peran: Pengusul, Dishub · Koordinator, Dishub · Petugas lapangan, Bappeda, atau Admin."]
   - [60.4, 63.0, "Instansi: isi hanya untuk pengusul dari instansi."]
   - [48.6, 73.4, "Simpan. Batal menutup jendela tanpa menyimpan."]
 ```
 
 > [!NOTE]
-> Petugas lapangan tidak punya peran sendiri. Beri mereka peran **Dishub**, lalu mereka memakai mode lapangan di HP.
+> Dishub punya dua pilihan peran. **Dishub · Koordinator** melihat semua laporan kerusakan, menugaskan petugas, dan menolak laporan. **Dishub · Petugas lapangan** di menu Pemeliharaan hanya melihat laporan yang ditugaskan kepadanya, lalu mengecek dan menandai selesai. Untuk Usulan, keduanya sama. Akun Dishub lama otomatis menjadi koordinator.
 
 ## 2. Ubah data, peran, atau nonaktifkan
 

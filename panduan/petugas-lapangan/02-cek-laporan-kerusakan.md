@@ -6,7 +6,7 @@ urutan: 2
 layar: [pemeliharaan]
 durasi: 3 menit
 perangkat: HP
-diperbarui: 2026-10-19
+diperbarui: 2026-10-22
 ---
 
 Koordinator Dishub menugaskan laporan kerusakan kepadamu. Tugasmu: cek kondisi di lokasi, putuskan apakah perlu diperbaiki, lalu tandai selesai setelah diperbaiki.
@@ -32,7 +32,7 @@ penanda:
 Kartu menampilkan nomor laporan `LPR-…`, jarak dari posisimu, jenis kerusakan, lokasi, dan foto dari pelapor.
 
 > [!NOTE]
-> Daftar di tab ini berisi semua laporan dengan status itu, tidak hanya yang ditugaskan kepadamu. Tulisan **Ditugaskan ke saya** menandai laporan milikmu.
+> Akun **Dishub · Petugas lapangan** hanya melihat laporan yang ditugaskan kepadanya, jadi tab **Baru** tidak ada. Akun koordinator melihat semua laporan; tulisan **Ditugaskan ke saya** menandai laporan miliknya.
 
 ## 2. Cek kondisi
 

@@ -37,6 +37,7 @@ new class extends Component
     {
         // data sama dengan tab daftar; tampilannya saja yang peta lapangan
         return LaporanKerusakan::where('status', $this->statusTab($this->tab))
+            ->when(auth()->user()->isPetugasLapangan(), fn ($q) => $q->where('petugas_id', auth()->id()))
             ->with('jenis', 'kecamatan', 'desa', 'pelapor', 'penugas', 'petugas', 'foto')
             ->orderBy($this->tab === 'ditugaskan' ? 'ditugaskan_at' : 'dicek_at')->get();
     }
@@ -64,7 +65,7 @@ new class extends Component
     public function buka(int $id, ?int $no = null): void
     {
         $l = LaporanKerusakan::findOrFail($id);
-        abort_unless(auth()->user()->hasRole(Role::Dishub) && in_array($l->status, [SL::Ditugaskan, SL::MenungguPerbaikan], true), 403);
+        abort_unless($l->bolehDikerjakan(auth()->user()) && in_array($l->status, [SL::Ditugaskan, SL::MenungguPerbaikan], true), 403);
         $this->reset('foto', 'fotoKoordinat', 'catatan', 'alasan', 'hasil');
         $this->resetValidation();
         $this->laporanSheet = $id;
@@ -107,7 +108,7 @@ new class extends Component
     public function cek(bool $rusak, ?float $lat = null, ?float $lng = null): void
     {
         $l = $this->laporan;
-        abort_unless($l && auth()->user()->hasRole(Role::Dishub) && $l->status === SL::Ditugaskan, 403);
+        abort_unless($l && $l->bolehDikerjakan(auth()->user()) && $l->status === SL::Ditugaskan, 403);
         $this->validate([
             'foto' => 'required|array|min:1',
             'foto.*' => 'image|max:12288',
@@ -126,7 +127,7 @@ new class extends Component
     public function selesai(): void
     {
         $l = $this->laporan;
-        abort_unless($l && auth()->user()->hasRole(Role::Dishub) && $l->status === SL::MenungguPerbaikan, 403);
+        abort_unless($l && $l->bolehDikerjakan(auth()->user()) && $l->status === SL::MenungguPerbaikan, 403);
         $this->validate(['foto' => 'required|array|min:1', 'foto.*' => 'image|max:12288', 'catatan' => 'nullable|string|max:300'],
             ['foto.required' => 'Ambil minimal 1 foto hasil perbaikan.']);
 

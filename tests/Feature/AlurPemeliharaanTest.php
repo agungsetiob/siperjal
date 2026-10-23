@@ -75,7 +75,9 @@ class AlurPemeliharaanTest extends TestCase
         $this->assertSame('LPR-'.now()->year.'-00001', $l->nomor);
         $this->assertSame(StatusLaporan::Baru, $l->status);
         $this->assertCount(1, $l->foto);
-        Notification::assertSentTo([$koordinator, $petugas], LaporanBerubah::class, fn ($n) => $n->jenis === 'kerusakan_baru');
+        Notification::assertSentTo($koordinator, LaporanBerubah::class, fn ($n) => $n->jenis === 'kerusakan_baru');
+        // petugas lapangan baru dikabari saat ditugaskan
+        Notification::assertNotSentTo($petugas, LaporanBerubah::class, fn ($n) => $n->jenis === 'kerusakan_baru');
         $this->assertSame(['selesai', 'aktif', 'nanti', 'nanti'], array_column($l->langkah(), 'keadaan'));
 
         // 2. Koordinator menugaskan petugas → petugas & pelapor dikabari
@@ -235,6 +237,75 @@ class AlurPemeliharaanTest extends TestCase
         $this->get(route('pemeliharaan', ['tab' => 'semua']))->assertOk()->assertSee('Laporan masuk')->assertSee($l->nomor)->assertDontSeeHtml('petaTugas(');
         $this->get(route('pemeliharaan', ['tab' => 'ditugaskan', 'mode' => 'peta']))->assertOk()->assertSeeHtml('petaTugas(');
         $this->actingAs($this->user('bappeda@usuljalan.test'))->get(route('pemeliharaan'))->assertForbidden();
+    }
+
+    public function test_petugas_lapangan_hanya_melihat_dan_mengerjakan_tugasnya(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $item = $this->terpasang();
+        $koordinator = $this->user('dishub@usuljalan.test');
+        $petugas = $this->user('petugas@usuljalan.test');
+        $lain = User::create(['name' => 'Dedi Lapangan', 'email' => 'dedi@usuljalan.test', 'role' => \App\Enums\Role::Dishub, 'petugas_lapangan' => true]);
+        $this->assertTrue($petugas->isPetugasLapangan());
+        $this->assertTrue($koordinator->isKoordinator());
+        $this->assertSame('Dishub · Petugas lapangan', $lain->keteranganPeran());
+
+        $milikSaya = $this->lapor($item);
+        $milikLain = $this->lapor(PerlengkapanTerpasang::create(['jenis_perlengkapan_id' => $item->jenis_perlengkapan_id, 'jumlah' => 1, 'lat' => -3.46, 'lng' => 116.01]));
+        $baru = $this->lapor(PerlengkapanTerpasang::create(['jenis_perlengkapan_id' => $item->jenis_perlengkapan_id, 'jumlah' => 1, 'lat' => -3.47, 'lng' => 116.02]));
+        $this->actingAs($koordinator);
+        $milikSaya->tugaskan($petugas);
+        $milikLain->tugaskan($lain);
+
+        // koordinator melihat semua, petugas pertama di daftar pilihan adalah petugas lapangan
+        $this->assertSame(3, LaporanKerusakan::terlihatOleh($koordinator)->count());
+        $this->assertTrue(LaporanKerusakan::petugasLapangan()->first()->petugas_lapangan);
+
+        // petugas: hanya tugasnya, tanpa tab Baru
+        $this->actingAs($petugas);
+        $this->assertSame([$milikSaya->id], LaporanKerusakan::terlihatOleh($petugas)->pluck('id')->all());
+        $this->get(route('pemeliharaan', ['tab' => 'semua']))->assertOk()->assertSee($milikSaya->nomor)->assertDontSee($milikLain->nomor)->assertDontSee($baru->nomor);
+        // kabar lama dari tugas yang dialihkan: tidak dibuka, hanya pemberitahuan
+        $this->get(route('pemeliharaan', $milikLain))->assertOk();
+        Livewire::test('pages::pemeliharaan.index', ['laporan' => $milikLain])->assertSet('pilih', null)->assertDispatched('toast');
+        $this->actingAs($this->user('desa@usuljalan.test'))->get(route('pemeliharaan', $milikLain))->assertForbidden();
+        $this->actingAs($petugas);
+        Livewire::test('pages::pemeliharaan.index')->assertSet('tab', 'ditugaskan')->assertDontSee('Baru');
+        Livewire::test('pemeliharaan.tugas', ['tab' => 'ditugaskan'])->assertSee($milikSaya->nomor)->assertDontSee($milikLain->nomor);
+
+        // petugas tidak bisa menugaskan / menolak; Cek Kondisi hanya untuk tugasnya
+        Livewire::test('pemeliharaan.detail', ['laporanId' => $milikSaya->id])
+            ->assertSee('Cek Kondisi')->assertDontSee('Tolak laporan')->assertDontSee('Ganti Petugas')
+            ->call('buka', 'tugaskan')->assertForbidden();
+        Livewire::test('pemeliharaan.detail', ['laporanId' => $milikSaya->id])->call('tolak')->assertForbidden();
+        Livewire::test('pemeliharaan.tugas', ['tanpaPeta' => true])->call('buka', $milikLain->id)->assertForbidden();
+        Livewire::test('pemeliharaan.tugas', ['tanpaPeta' => true])->call('buka', $milikSaya->id)->assertSet('sheet', 'cek');
+
+        // koordinator tetap bisa cek kondisi laporan siapa pun
+        $this->actingAs($koordinator);
+        Livewire::test('pemeliharaan.tugas', ['tanpaPeta' => true])->call('buka', $milikLain->id)->assertSet('sheet', 'cek');
+    }
+
+    public function test_admin_mengatur_koordinator_atau_petugas_lapangan(): void
+    {
+        $this->actingAs($this->user('admin@usuljalan.test'));
+        $rina = $this->user('dishub@usuljalan.test');
+        $warga = $this->user('warga@usuljalan.test');
+
+        Livewire::test('pages::pengaturan')->set('tab', 'pengguna')->assertSee('Dishub · Petugas lapangan')
+            ->call('ubahPeran', $rina->id, 'dishub_lapangan');
+        $this->assertTrue($rina->fresh()->isPetugasLapangan());
+        Livewire::test('pages::pengaturan')->call('ubahPeran', $rina->id, 'dishub');
+        $this->assertTrue($rina->fresh()->isKoordinator());
+        Livewire::test('pages::pengaturan')->call('ubahPeran', $warga->id, 'dishub_lapangan');
+        $this->assertTrue($warga->fresh()->isPetugasLapangan());
+        Livewire::test('pages::pengaturan')->call('ubahPeran', $warga->id, 'kepala')->assertStatus(422);
+
+        Livewire::test('pages::pengaturan')->call('buka', 'pengguna')
+            ->set('form.name', 'Eko Lapangan')->set('form.email', 'eko@usuljalan.test')->set('form.role', 'dishub_lapangan')
+            ->call('simpanDialog')->assertHasNoErrors();
+        $this->assertTrue(User::where('email', 'eko@usuljalan.test')->first()->isPetugasLapangan());
     }
 
     public function test_admin_hanya_melihat_pemeliharaan(): void

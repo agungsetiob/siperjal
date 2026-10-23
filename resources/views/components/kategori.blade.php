@@ -15,7 +15,9 @@
             : \App\Models\Usulan::where('status', StatusUsulan::Diperiksa)->count()],
         'pemeliharaan' => [$pengusul ? 'Laporan kerusakan' : 'Pemeliharaan', 'wrench', route('pemeliharaan'), $pengusul
             ? \App\Models\LaporanKerusakan::where('user_id', $user->id)->count()
-            : \App\Models\LaporanKerusakan::where('status', StatusLaporan::Baru)->count()],
+            : ($user->isPetugasLapangan()
+                ? \App\Models\LaporanKerusakan::where('petugas_id', $user->id)->where('status', StatusLaporan::Ditugaskan)->count()
+                : \App\Models\LaporanKerusakan::where('status', StatusLaporan::Baru)->count())],
     ] : [];
     // data perlengkapan terpasang (termasuk yang lama, sebelum SIPERJAL): hanya Dishub & admin
     if ($user->hasRole(Role::Dishub, Role::Admin)) {

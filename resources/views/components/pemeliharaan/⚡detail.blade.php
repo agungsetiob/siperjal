@@ -5,14 +5,16 @@ use App\Enums\StatusLaporan as SL;
 use App\Models\LaporanKerusakan;
 use App\Models\User;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
- * Panel detail laporan kerusakan untuk koordinator Dishub / admin (desain PM1).
- * Tindak lanjut per status: Tugaskan Petugas · Tolak laporan · Tandai Selesai Diperbaiki — hanya Dishub; admin hanya melihat.
+ * Panel detail laporan kerusakan untuk Dishub / admin (desain PM1).
+ * Tugaskan Petugas · Tolak laporan: koordinator. Cek Kondisi · Tandai Selesai: koordinator atau petugas yang ditugaskan; admin hanya melihat.
  */
 new class extends Component
 {
+    #[Locked] // dipilih dari daftar yang sudah disaring terlihatOleh
     public int $laporanId;
     public int $posisi = 0;
     public int $total = 0;
@@ -49,9 +51,17 @@ new class extends Component
     }
 
     #[Computed]
+    /** Tugaskan / Ganti Petugas / Tolak laporan: koordinator Dishub. */
     public function kelola(): bool
     {
-        return auth()->user()->hasRole(Role::Dishub);
+        return auth()->user()->isKoordinator();
+    }
+
+    /** Cek Kondisi / Tandai Selesai: koordinator, atau petugas lapangan yang ditugaskan. */
+    #[Computed]
+    public function kerjakan(): bool
+    {
+        return $this->laporan->bolehDikerjakan(auth()->user());
     }
 
     private function bolehKelola(): void
@@ -299,14 +309,20 @@ new class extends Component
             <span class="flex items-center gap-1.5 text-sm font-semibold {{ $s === SL::Ditolak ? 'text-danger' : 'text-fg-muted' }}">@svg('lucide-circle-x', 'size-4') {{ $s === SL::Ditolak ? 'Ditolak: '.$l->alasan_tolak.' · oleh '.($l->penutup?->name ?? '—') : 'Dibatalkan oleh pelapor' }}</span>
         @endif
 
-        @if ($s->aktif() && ! $this->kelola)
+        @if ($s->aktif() && ! $this->kelola && ! $this->kerjakan)
             <span class="flex items-center gap-1.5 border-t border-line pt-4 font-caption text-xs text-fg-muted">@svg('lucide-eye', 'size-3.5') Admin hanya melihat · tindak lanjut oleh Dishub</span>
+        @elseif ($s->aktif() && ! $this->kelola && $s === SL::Baru)
+            <span class="flex items-center gap-1.5 border-t border-line pt-4 font-caption text-xs text-fg-muted">@svg('lucide-clock', 'size-3.5') Menunggu koordinator menugaskan petugas</span>
         @elseif ($s->aktif())
             <div class="flex flex-wrap items-center gap-3 border-t border-line pt-4">
                 @if ($s === SL::MenungguPerbaikan)
                     <span class="flex items-center gap-1.5 font-caption text-xs text-fg-muted">@svg('lucide-bell', 'size-3.5') pelapor & petugas dikabari otomatis</span>
                     <span class="flex-1"></span>
                     <button type="button" wire:click="$dispatch('buka-tugas', { id: {{ $l->id }} })" class="flex w-full items-center justify-center gap-2 sm:w-auto rounded-sm bg-success px-5 py-3 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">Tandai Selesai Diperbaiki @svg('lucide-circle-check', 'size-[18px]')</button>
+                @elseif (! $this->kelola)
+                    <span class="flex items-center gap-1.5 font-caption text-xs text-fg-muted">@svg('lucide-map-pin', 'size-3.5') cek ke lokasi, foto kondisinya sekarang</span>
+                    <span class="flex-1"></span>
+                    <button type="button" wire:click="$dispatch('buka-tugas', { id: {{ $l->id }} })" class="flex w-full items-center justify-center gap-2 sm:w-auto rounded-sm bg-accent px-5 py-3 text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110">Cek Kondisi @svg('lucide-clipboard-check', 'size-[18px]')</button>
                 @else
                     <button type="button" wire:click="buka('tolak')" class="flex items-center gap-1.5 rounded-sm px-3 py-2.5 text-sm font-semibold text-danger hover:bg-danger-bg">@svg('lucide-circle-x', 'size-4') Tolak laporan</button>
                     <span class="font-caption text-xs text-fg-muted">untuk laporan iseng / duplikat</span>
@@ -322,7 +338,7 @@ new class extends Component
         @endif
     </div>
 
-    @if ($this->kelola)
+    @if ($this->kerjakan)
         <livewire:pemeliharaan.tugas :tanpa-peta="true" :key="'cek-'.$l->id" />
     @endif
 

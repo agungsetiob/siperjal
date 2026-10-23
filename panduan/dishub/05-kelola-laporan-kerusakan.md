@@ -6,9 +6,9 @@ urutan: 5
 layar: [pemeliharaan]
 durasi: 4 menit
 perangkat: Desktop
-diperbarui: 2026-10-06
+diperbarui: 2026-10-22
 ---
-Laporan kerusakan perlengkapan jalan masuk ke menu **Pemeliharaan**. Laporan bisa tertaut ke perlengkapan yang terpasang lewat aplikasi (detailnya menampilkan asal usulan), atau berupa titik yang ditandai pelapor sendiri (tertulis "Tidak tertaut data terpasang"). Alurnya: Dishub menugaskan petugas, petugas mengecek di lapangan, lalu laporan ditutup setelah diperbaiki. Admin hanya bisa melihat laporan, tidak bisa menugaskan, menolak, atau menutupnya.
+Laporan kerusakan perlengkapan jalan masuk ke menu **Pemeliharaan**. Laporan bisa tertaut ke perlengkapan yang terpasang lewat aplikasi (detailnya menampilkan asal usulan), atau berupa titik yang ditandai pelapor sendiri (tertulis "Tidak tertaut data terpasang"). Alurnya: koordinator Dishub menugaskan petugas, petugas mengecek di lapangan, lalu laporan ditutup setelah diperbaiki. Panduan ini untuk akun **Dishub · Koordinator**. Akun **Dishub · Petugas lapangan** hanya melihat laporan yang ditugaskan kepadanya. Admin hanya bisa melihat laporan, tidak bisa menugaskan, menolak, atau menutupnya.
 
 ## 1. Buka Pemeliharaan
 

@@ -105,9 +105,10 @@ class LaporanKerusakan extends Model
 
     public function scopeTerlihatOleh(Builder $query, User $user): void
     {
-        match ($user->role) {
-            Role::Pengusul => $query->where('user_id', $user->id),
-            Role::Dishub, Role::Admin => null,
+        match (true) {
+            $user->role === Role::Pengusul => $query->where('user_id', $user->id),
+            $user->isPetugasLapangan() => $query->where('petugas_id', $user->id),
+            $user->hasRole(Role::Dishub, Role::Admin) => null,
             default => $query->whereRaw('1 = 0'),
         };
     }
@@ -135,7 +136,13 @@ class LaporanKerusakan extends Model
             ->withCount(['tugasLaporan as tugas_aktif' => fn ($q) => $q->aktif()])
             ->get()
             // petugas lapangan didahulukan, lalu yang paling sedikit tugas aktifnya
-            ->sortBy(fn ($u) => [str_contains(strtolower((string) $u->jabatan), 'lapangan') ? 0 : 1, $u->tugas_aktif, $u->name])->values();
+            ->sortBy(fn ($u) => [$u->petugas_lapangan ? 0 : 1, $u->tugas_aktif, $u->name])->values();
+    }
+
+    /** Boleh cek kondisi / tandai selesai: koordinator, atau petugas lapangan yang ditugaskan. */
+    public function bolehDikerjakan(User $user): bool
+    {
+        return $user->isKoordinator() || ($user->isPetugasLapangan() && $this->petugas_id === $user->id);
     }
 
     // ── Tampilan ──
@@ -292,7 +299,7 @@ class LaporanKerusakan extends Model
         $asal = $aset?->usulanItem?->usulan;
         $asal?->catat("{$aset->jenis->namaPendek()} dilaporkan rusak ({$laporan->nomor})", $laporan->kerusakanLabel());
         $laporan->kabari("Laporan kerusakan baru: {$laporan->judul()}", $laporan->lokasi().' · dari '.$laporan->namaPelapor(), 'kerusakan_baru',
-            User::where('role', Role::Dishub)->where('aktif', true)->get(), pelapor: false);
+            User::where('role', Role::Dishub)->where('petugas_lapangan', false)->where('aktif', true)->get(), pelapor: false);
 
         return $laporan;
     }

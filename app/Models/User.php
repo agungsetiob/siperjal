@@ -24,6 +24,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'role' => Role::class,
             'aktif' => 'boolean',
+            'petugas_lapangan' => 'boolean',
             'notif_email' => 'boolean',
             'notif_wa' => 'boolean',
         ];
@@ -50,6 +51,32 @@ class User extends Authenticatable
         return $this->role === Role::Pengusul;
     }
 
+    /** Dishub petugas lapangan: di Pemeliharaan hanya melihat & mengerjakan laporan yang ditugaskan kepadanya. */
+    public function isPetugasLapangan(): bool
+    {
+        return $this->role === Role::Dishub && $this->petugas_lapangan;
+    }
+
+    /** Dishub koordinator: melihat semua laporan kerusakan, menugaskan, dan menolak. */
+    public function isKoordinator(): bool
+    {
+        return $this->role === Role::Dishub && ! $this->petugas_lapangan;
+    }
+
+    /** Peran untuk dropdown Pengaturan → Pengguna: role, atau dishub_lapangan untuk petugas lapangan. */
+    public function peranPengaturan(): string
+    {
+        return $this->isPetugasLapangan() ? 'dishub_lapangan' : $this->role->value;
+    }
+
+    /** @return array<string, string> pilihan peran di Pengaturan (Dishub dipecah koordinator / petugas lapangan) */
+    public static function pilihanPeran(): array
+    {
+        return collect(Role::cases())->flatMap(fn ($r) => $r === Role::Dishub
+            ? ['dishub' => 'Dishub · Koordinator', 'dishub_lapangan' => 'Dishub · Petugas lapangan']
+            : [$r->value => $r->label()])->all();
+    }
+
     public function inisial(): string
     {
         return str($this->name)->explode(' ')->filter()->take(2)->map(fn ($k) => mb_strtoupper(mb_substr($k, 0, 1)))->implode('');
@@ -67,7 +94,13 @@ class User extends Authenticatable
             return $this->instansi?->nama ?? 'Masyarakat';
         }
 
-        return collect([$this->role->label(), $this->jabatan])->filter()->implode(' · ');
+        $jabatan = $this->jabatan ?: match (true) {
+            $this->isPetugasLapangan() => 'Petugas lapangan',
+            $this->isKoordinator() => 'Koordinator',
+            default => null,
+        };
+
+        return collect([$this->role->label(), $jabatan])->filter()->implode(' · ');
     }
 
     public function jenisPengusul(): string

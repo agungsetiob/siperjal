@@ -36,7 +36,10 @@ new #[Layout('layouts.app')] class extends Component
     public function mount(?LaporanKerusakan $laporan = null): void
     {
         $this->tab = array_key_exists($this->tab, $this->daftarTab()) ? $this->tab : array_key_first($this->daftarTab());
-        if ($laporan?->exists) {
+        if ($laporan?->exists && $this->user->isPetugasLapangan() && ! $laporan->bolehDikerjakan($this->user)) {
+            // kabar lama dari tugas yang sudah dialihkan ke petugas lain: tampilkan daftar tugas sendiri
+            $this->dispatch('toast', pesan: "{$laporan->nomor} sudah tidak ditugaskan kepadamu", gagal: true);
+        } elseif ($laporan?->exists) {
             abort_unless(LaporanKerusakan::terlihatOleh($this->user)->whereKey($laporan->id)->exists(), 403);
             $this->pilih = $laporan->id;
         }
@@ -57,7 +60,8 @@ new #[Layout('layouts.app')] class extends Component
                 'selesai' => ['Selesai', fn ($q) => $q->whereNotIn('status', [SL::Baru, SL::Ditugaskan, SL::MenungguPerbaikan])],
             ]
             : [
-                'baru' => ['Baru', fn ($q) => $q->where('status', SL::Baru)],
+                // petugas lapangan tidak memegang laporan baru (koordinator yang menugaskan)
+                ...($this->user->isPetugasLapangan() ? [] : ['baru' => ['Baru', fn ($q) => $q->where('status', SL::Baru)]]),
                 'ditugaskan' => ['Ditugaskan', fn ($q) => $q->where('status', SL::Ditugaskan)],
                 'perbaikan' => ['Perbaikan', fn ($q) => $q->where('status', SL::MenungguPerbaikan)],
                 'semua' => ['Semua', fn ($q) => $q],
@@ -178,6 +182,9 @@ new #[Layout('layouts.app')] class extends Component
         // token: lpr-selesai:{id} (detail desktop) atau lpr-selesai:{id}:hp (panel hasil Tugas Saya)
         [, $id, $asal] = explode(':', $token) + [null, null, null];
         $l = LaporanKerusakan::find((int) $id);
+        if ($l && ! $l->bolehDikerjakan($this->user)) {
+            return;
+        }
         if ($l?->status === SL::Selesai && $l->selesai_at->gt(now()->subMinutes(10))) {
             $l->batalSelesai();
             if ($asal !== 'hp') { // desktop: buka lagi laporan yang diurungkan; HP petugas tetap di Tugas Saya

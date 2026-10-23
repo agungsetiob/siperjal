@@ -71,7 +71,7 @@ new #[Layout('layouts.app')] class extends Component
     #[Computed]
     public function kelola(): bool
     {
-        return auth()->user()->hasRole(Role::Admin, Role::Dishub);
+        return auth()->user()->hasRole(Role::Dishub, Role::Admin);
     }
 
     #[Computed]

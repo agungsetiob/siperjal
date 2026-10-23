@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Koordinator & Petugas Lapangan · SIPERJAL</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #000100; --muted: #565b73; --line: #dfe2ee;
+    --accent: #4556a9; --accent-soft: #e9ecf7; --accent-deep: #1d2554;
+    --tanda: #e11d48; --ok: #0b7a4f; --ok-bg: #e3f4ec; --warn-bg: #fff4d6;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: #14172b; font-family: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif; color: var(--fg); overflow: hidden; }
+  /* Panggung 1280x720 yang diskalakan memenuhi layar */
+  #panggung { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center; }
+  .slide { position: absolute; inset: 0; background: var(--bg); display: none; padding: 56px 72px; overflow: hidden; }
+  .slide.aktif { display: flex; flex-direction: column; }
+  h1, h2 { font-family: 'Anton', 'Impact', 'Arial Narrow', sans-serif; font-weight: 400; letter-spacing: .5px; text-transform: uppercase; color: var(--accent-deep); }
+  h1 { font-size: 76px; line-height: 1.02; }
+  h2 { font-size: 46px; line-height: 1.05; }
+  .label { font: 700 15px/1 'Inter', sans-serif; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+  .sub { font-size: 22px; line-height: 1.45; color: var(--muted); margin-top: 14px; }
+  p, li { font-size: 22px; line-height: 1.45; }
+  b { font-weight: 700; }
+  .isi { flex: 1; display: flex; gap: 40px; margin-top: 26px; min-height: 0; }
+  .kiri { width: 400px; flex: none; display: flex; flex-direction: column; gap: 16px; }
+  .kanan { flex: 1; min-width: 0; display: flex; align-items: flex-start; justify-content: center; }
+  .kanan img { max-width: 100%; max-height: 100%; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 6px 24px #1d255422; }
+  .dua { display: flex; gap: 28px; align-items: flex-start; justify-content: center; height: 100%; }
+  .dua img { height: 100%; width: auto; max-width: 48%; object-fit: contain; }
+  .kartu { background: var(--accent-soft); border-radius: 12px; padding: 16px 20px; }
+  .kartu.ok { background: var(--ok-bg); }
+  .kartu.warn { background: var(--warn-bg); }
+  .kartu small { display: block; font: 700 13px/1 'Inter', sans-serif; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .no { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--tanda); color: #fff; font: 700 16px/1 'Inter', sans-serif; flex: none; }
+  .baris { display: flex; gap: 12px; align-items: flex-start; }
+  .baris span:last-child { font-size: 20px; line-height: 1.4; }
+  table { border-collapse: collapse; width: 100%; margin-top: 22px; }
+  th { text-align: left; font: 700 14px/1 'Inter', sans-serif; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 0 16px 10px; }
+  td { vertical-align: top; padding: 16px; border-top: 1px solid var(--line); font-size: 21px; line-height: 1.4; }
+  td:first-child { width: 44%; font-weight: 600; }
+  td .tag { display: inline-block; font: 700 13px/1 'Inter', sans-serif; letter-spacing: 1px; padding: 5px 8px; border-radius: 6px; vertical-align: 2px; margin-right: 6px; }
+  .tag.ok { background: var(--ok-bg); color: var(--ok); }
+  .tag.wajib { background: #fde2e8; color: var(--tanda); }
+  .tag.opsi { background: var(--accent-soft); color: var(--accent); }
+  .alur { display: flex; align-items: stretch; gap: 14px; margin-top: 34px; }
+  .alur .k { flex: 1; background: var(--accent-soft); border-radius: 14px; padding: 20px 20px 22px; position: relative; }
+  .alur .k b.n { display: block; font: 400 44px/1 'Anton', 'Impact', sans-serif; color: var(--accent); margin-bottom: 10px; }
+  .alur .k span { font-size: 20px; line-height: 1.35; display: block; }
+  .alur .k.akhir { background: var(--ok-bg); } .alur .k.akhir b.n { color: var(--ok); }
+  .panah { align-self: center; font-size: 28px; color: var(--muted); }
+  .tengah { justify-content: center; }
+  .cover { background: linear-gradient(135deg, #1d2554 0%, #4556a9 100%); color: #fff; justify-content: center; }
+  .cover h1 { color: #fff; } .cover .sub { color: #dfe4ff; max-width: 820px; font-size: 26px; }
+  .cover .label { color: #aab6ff; }
+  .cover .pil { margin-top: 40px; display: inline-flex; gap: 10px; font: 600 16px/1 'Inter', sans-serif; color: #dfe4ff; }
+  .cover .pil span { border: 1.5px solid #ffffff66; border-radius: 99px; padding: 8px 14px; }
+  .nav { position: fixed; left: 0; right: 0; bottom: 0; height: 4px; background: #ffffff22; z-index: 5; }
+  .nav i { display: block; height: 100%; background: #8c9cf5; width: 0; transition: width .2s; }
+  .hitung { position: fixed; right: 16px; bottom: 12px; font: 600 13px 'Inter', sans-serif; color: #ffffff99; z-index: 5; }
+  .petunjuk { position: fixed; left: 16px; bottom: 12px; font: 13px 'Inter', sans-serif; color: #ffffff77; z-index: 5; }
+  @media print {
+    html, body { overflow: visible; background: #fff; height: auto; }
+    #panggung { position: static; transform: none !important; width: auto; height: auto; }
+    .slide { display: flex !important; position: relative; width: 1280px; height: 720px; page-break-after: always; break-after: page; }
+    .nav, .hitung, .petunjuk { display: none; }
+    @page { size: 1280px 720px; margin: 0; }
+  }
+</style>
+<style>
+  .peran { width:100%; border-collapse:collapse; margin-top:26px; }
+  .peran th { font-size:14px; padding:0 14px 12px; text-align:center; }
+  .peran th:first-child { text-align:left; }
+  .peran td { font-size:20px; padding:13px 14px; text-align:center; width:auto; font-weight:400; }
+  .peran td:first-child { text-align:left; width:46%; font-weight:600; }
+  .ya { color: var(--ok); font-weight:700; } .tidak { color: #b4b8c8; } .sendiri { color: var(--accent); font-weight:600; font-size:17px; }
+  .banding { display:flex; gap:24px; margin-top:30px; }
+  .banding > div { flex:1; border-radius:14px; padding:24px 26px; }
+  .banding .dulu { background:#fde2e8; } .banding .kini { background: var(--ok-bg); }
+  .banding small { display:block; font:700 14px/1 'Inter',sans-serif; letter-spacing:1.6px; text-transform:uppercase; margin-bottom:12px; }
+  .banding .dulu small { color: var(--tanda); } .banding .kini small { color: var(--ok); }
+  .banding li { font-size:20px; margin-left:22px; margin-bottom:6px; }
+  .hp { height:100%; width:auto !important; max-width:none !important; }
+</style>
+
+</head>
+<body>
+<div id="panggung">
+
+  <!-- 1 · Sampul -->
+  <section class="slide cover">
+    <div class="label">SIPERJAL · Pemeliharaan</div>
+    <h1>Koordinator &amp;<br>petugas lapangan</h1>
+    <p class="sub">Akun petugas lapangan sekarang <b>hanya melihat laporan kerusakan yang ditugaskan kepadanya</b>. Koordinator tetap melihat semua dan membagi tugas.</p>
+    <div class="pil"><span>Akun Dishub</span><span>Menu Pemeliharaan</span><span>Diatur admin</span></div>
+  </section>
+
+  <!-- 2 · Dulu vs sekarang -->
+  <section class="slide tengah">
+    <div class="label">Apa yang berubah</div>
+    <h2>Laporan orang lain tidak muncul lagi</h2>
+    <div class="banding">
+      <div class="dulu"><small>Sebelumnya</small><ul>
+        <li>Semua akun Dishub punya hak yang sama.</li>
+        <li>Petugas melihat <b>semua</b> laporan, termasuk yang ditugaskan ke petugas lain.</li>
+        <li>Petugas bisa menugaskan dan menolak laporan.</li>
+      </ul></div>
+      <div class="kini"><small>Sekarang</small><ul>
+        <li>Akun Dishub ada 2: <b>Koordinator</b> dan <b>Petugas lapangan</b>.</li>
+        <li>Petugas lapangan hanya melihat <b>laporan yang ditugaskan kepadanya</b>.</li>
+        <li>Menugaskan &amp; menolak hanya oleh koordinator.</li>
+      </ul></div>
+    </div>
+    <p class="sub" style="margin-top:22px">Untuk <b>Usulan</b> tidak ada perubahan: kedua akun tetap bisa memeriksa dan menandai terpasang.</p>
+  </section>
+
+  <!-- 3 · Siapa bisa apa -->
+  <section class="slide">
+    <div class="label">Pembagian hak di Pemeliharaan</div>
+    <h2>Siapa bisa apa</h2>
+    <table class="peran">
+      <tr><th>Di menu Pemeliharaan</th><th>Koordinator</th><th>Petugas lapangan</th><th>Admin</th></tr>
+      <tr><td>Melihat laporan</td><td class="ya">Semua</td><td class="sendiri">Hanya tugasnya</td><td class="ya">Semua</td></tr>
+      <tr><td>Tab <b>Baru</b> (laporan belum ditugaskan)</td><td class="ya">✓</td><td class="tidak">—</td><td class="ya">✓</td></tr>
+      <tr><td>Tugaskan / Ganti Petugas</td><td class="ya">✓</td><td class="tidak">—</td><td class="tidak">—</td></tr>
+      <tr><td>Tolak laporan (iseng / duplikat)</td><td class="ya">✓</td><td class="tidak">—</td><td class="tidak">—</td></tr>
+      <tr><td>Cek Kondisi &amp; Tandai Selesai Diperbaiki</td><td class="ya">✓</td><td class="sendiri">Tugasnya saja</td><td class="tidak">—</td></tr>
+      <tr><td>Dikabari saat ada laporan baru</td><td class="ya">✓</td><td class="sendiri">Saat ditugaskan</td><td class="tidak">—</td></tr>
+    </table>
+  </section>
+
+  <!-- 4 · Admin mengatur -->
+  <section class="slide">
+    <div class="label">Admin · Pengaturan → Pengguna</div>
+    <h2>Pilih perannya di kolom Peran</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="baris"><span class="no">1</span><span><b>Dishub · Koordinator</b>: kepala seksi / yang membagi tugas.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Dishub · Petugas lapangan</b>: yang turun ke lokasi.</span></div>
+        <div class="kartu ok"><small>Akun lama</small><p style="font-size:19px">Semua akun Dishub yang sudah ada <b>otomatis jadi Koordinator</b>. Cukup ganti akun petugas ke <b>Dishub · Petugas lapangan</b>.</p></div>
+        <div class="kartu"><small>Tersimpan otomatis</small><p style="font-size:19px">Begitu dipilih langsung tersimpan, ada tombol <b>Urungkan</b>. Pilihan yang sama ada di <b>Tambah Pengguna</b>.</p></div>
+      </div>
+      <div class="kanan"><img src="img/01-admin-peran.png" alt="Kolom Peran di Pengaturan Pengguna"></div>
+    </div>
+  </section>
+
+  <!-- 5 · Petugas: daftar -->
+  <section class="slide">
+    <div class="label">Akun petugas lapangan</div>
+    <h2>Hanya laporan miliknya</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="baris"><span class="no">1</span><span>Tab <b>Baru</b> tidak ada. Yang tampil: <b>Ditugaskan</b>, <b>Perbaikan</b>, <b>Semua</b>.</span></div>
+        <div class="kartu"><small>Contoh</small><p style="font-size:19px">Ahmad Fauzi hanya melihat 5 laporan yang ditugaskan kepadanya. Koordinator melihat 7.</p></div>
+        <div class="kartu ok"><small>Di bawah nama</small><p style="font-size:19px">Bar atas menampilkan <b>Dishub · Petugas lapangan</b>, jadi jelas akun apa yang dipakai.</p></div>
+      </div>
+      <div class="kanan"><img src="img/02-petugas-daftar.png" alt="Daftar laporan akun petugas"></div>
+    </div>
+  </section>
+
+  <!-- 6 · Petugas: tindak lanjut -->
+  <section class="slide">
+    <div class="label">Akun petugas lapangan</div>
+    <h2>Tinggal cek kondisi</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="baris"><span class="no">1</span><span>Di bagian <b>Tindak lanjut</b> hanya ada <b>Cek Kondisi</b> (lalu nanti <b>Tandai Selesai Diperbaiki</b>).</span></div>
+        <div class="kartu warn"><small>Tidak muncul</small><p style="font-size:19px">Tombol <b>Tolak laporan</b> dan <b>Ganti Petugas</b>. Itu tugas koordinator.</p></div>
+      </div>
+      <div class="kanan"><img src="img/03-petugas-tindak-lanjut.png" alt="Tindak lanjut di akun petugas"></div>
+    </div>
+  </section>
+
+  <!-- 7 · Petugas: HP -->
+  <section class="slide">
+    <div class="label">Akun petugas lapangan · di HP</div>
+    <h2>Peta tugas juga hanya miliknya</h2>
+    <div class="isi">
+      <div class="kiri" style="width:520px">
+        <div class="baris"><span class="no">1</span><span>Buka <b>Pemeliharaan</b> → <b>Peta</b>. Titik di peta hanya laporan yang ditugaskan kepadanya.</span></div>
+        <div class="baris"><span class="no">2</span><span>Ketuk <b>Cek Kondisi</b>, foto kondisi sekarang, lalu setujui atau tolak.</span></div>
+        <div class="kartu"><small>Tanda</small><p style="font-size:19px">Kartu bertuliskan <b>Ditugaskan ke saya</b>.</p></div>
+      </div>
+      <div class="kanan"><img class="hp" src="img/04-petugas-hp.png" alt="Peta tugas di HP petugas"></div>
+    </div>
+  </section>
+
+  <!-- 8 · Koordinator -->
+  <section class="slide">
+    <div class="label">Akun koordinator</div>
+    <h2>Tetap seperti biasa</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="baris"><span class="no">1</span><span>Tab <b>Baru</b> berisi laporan yang belum ditugaskan. Tab <b>Semua</b> berisi seluruh laporan.</span></div>
+        <div class="kartu ok"><small>Dikabari</small><p style="font-size:19px">Hanya koordinator yang dapat kabar <b>Laporan kerusakan baru</b>. Petugas dikabari saat ditugaskan.</p></div>
+      </div>
+      <div class="kanan"><img src="img/05-koor-daftar.png" alt="Daftar laporan akun koordinator"></div>
+    </div>
+  </section>
+
+  <!-- 9 · Koordinator: tugaskan -->
+  <section class="slide">
+    <div class="label">Akun koordinator · Tugaskan Petugas</div>
+    <h2>Petugas lapangan disarankan di atas</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="kartu"><small>Urutan</small><p style="font-size:19px">Akun <b>petugas lapangan</b> di atas, lalu yang tugas aktifnya paling sedikit. Koordinator tetap bisa dipilih bila ingin cek sendiri.</p></div>
+        <div class="kartu ok"><small>Setelah ditugaskan</small><p style="font-size:19px">Laporan langsung muncul di akun petugas itu (dan hilang dari petugas sebelumnya bila <b>Ganti Petugas</b>).</p></div>
+      </div>
+      <div class="kanan"><img src="img/06-koor-tugaskan.png" alt="Dialog Tugaskan petugas"></div>
+    </div>
+  </section>
+
+  <!-- 10 · Tugas dialihkan -->
+  <section class="slide">
+    <div class="label">Bila tugas dialihkan</div>
+    <h2>Notifikasi lama tidak membuka laporan</h2>
+    <div class="isi">
+      <div class="kiri">
+        <div class="kartu warn"><small>Contoh</small><p style="font-size:19px">Laporan sudah dipindah ke petugas lain, tapi petugas lama mengetuk notifikasi “Tugas baru” yang lama.</p></div>
+        <div class="kartu ok"><small>Hasilnya</small><p style="font-size:19px">Muncul pesan <b>“… sudah tidak ditugaskan kepadamu”</b> dan daftar tugasnya sendiri yang tampil.</p></div>
+      </div>
+      <div class="kanan"><img src="img/07-petugas-alih.png" alt="Pesan tugas sudah dialihkan"></div>
+    </div>
+  </section>
+
+  <!-- 11 · Ringkas -->
+  <section class="slide tengah">
+    <div class="label">Yang perlu dilakukan</div>
+    <h2>Cukup 2 langkah</h2>
+    <div class="alur">
+      <div class="k"><b class="n">1</b><span>Masuk dengan akun <b>Admin</b>, buka <b>Pengaturan → Pengguna</b>.</span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">2</b><span>Ganti Peran akun petugas lapangan menjadi <b>Dishub · Petugas lapangan</b>.</span></div>
+      <div class="panah">→</div>
+      <div class="k akhir"><b class="n">✓</b><span>Selesai. Petugas langsung hanya melihat tugasnya; akun lain tetap <b>Koordinator</b>.</span></div>
+    </div>
+  </section>
+
+</div>
+<div class="nav"><i id="bar"></i></div>
+<div class="petunjuk">← → pindah slide · F layar penuh · cetak (Ctrl/Cmd+P) untuk simpan PDF</div>
+<div class="hitung" id="hitung"></div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  const panggung = document.getElementById('panggung');
+  let i = Math.max(0, Math.min(slides.length - 1, (parseInt(location.hash.slice(1)) || 1) - 1));
+  function tampil(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('aktif', k === i));
+    document.getElementById('bar').style.width = ((i + 1) / slides.length * 100) + '%';
+    document.getElementById('hitung').textContent = (i + 1) + ' / ' + slides.length;
+    history.replaceState(null, '', '#' + (i + 1));
+  }
+  function skala() {
+    const s = Math.min(innerWidth / 1280, innerHeight / 720);
+    panggung.style.transform = `translate(-50%, -50%) scale(${s})`;
+  }
+  addEventListener('resize', skala);
+  addEventListener('keydown', e => {
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); tampil(i + 1); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); tampil(i - 1); }
+    else if (e.key === 'Home') tampil(0);
+    else if (e.key === 'End') tampil(slides.length - 1);
+    else if (e.key === 'f' || e.key === 'F') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
+  });
+  addEventListener('click', e => { if (e.clientX > innerWidth / 2) tampil(i + 1); else tampil(i - 1); });
+  skala(); tampil(i);
+</script>
+</body>
+</html>
