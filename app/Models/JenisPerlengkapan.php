@@ -13,12 +13,17 @@ class JenisPerlengkapan extends Model
 
     protected function casts(): array
     {
-        return ['aktif' => 'boolean', 'harga_satuan' => 'integer'];
+        return ['aktif' => 'boolean', 'per_unit' => 'boolean', 'harga_satuan' => 'integer'];
     }
 
     public function items()
     {
         return $this->hasMany(UsulanItem::class);
+    }
+
+    public function aset()
+    {
+        return $this->hasMany(PerlengkapanTerpasang::class);
     }
 
     /** Nama pendek untuk label (tanpa keterangan dalam kurung). */

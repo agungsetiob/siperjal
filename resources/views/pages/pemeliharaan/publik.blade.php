@@ -192,6 +192,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
                 <span class="grid size-11 shrink-0 place-items-center rounded-md text-fg-inverse" style="background: {{ $jenisL?->warna ?? '#4556A9' }}">@svg('lucide-'.$ikonL, 'size-5')</span>
                 <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span class="text-base font-semibold">{{ $jenisL?->namaPendek() ?? 'Perlengkapan' }}</span>
+                    @if ($item?->kode) <span class="font-caption text-xs font-semibold tracking-wide text-accent">{{ $item->kode }}</span> @endif
                     <span class="text-sm text-fg-muted">{{ $lokasiL }}</span>
                     @if ($it)
                         <span class="font-caption text-xs text-fg-muted">

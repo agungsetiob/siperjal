@@ -8,6 +8,7 @@ use App\Models\Instansi;
 use App\Models\JenisPerlengkapan;
 use App\Models\Kecamatan;
 use App\Models\User;
+use App\Support\KodeRegister;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -29,7 +30,11 @@ class DatabaseSeeder extends Seeder
             ['RPPJ (rambu penunjuk jurusan)', 'Rambu pendahuluan petunjuk jurusan', 'signpost', 'unit', 22_000_000, '#0891B2'],
         ];
         foreach ($jenis as $i => [$nama, $deskripsi, $ikon, $satuan, $harga, $warna]) {
-            JenisPerlengkapan::create(compact('nama', 'deskripsi', 'ikon', 'satuan', 'warna') + ['harga_satuan' => $harga, 'urutan' => $i]);
+            JenisPerlengkapan::create(compact('nama', 'deskripsi', 'ikon', 'satuan', 'warna') + [
+                'harga_satuan' => $harga, 'urutan' => $i,
+                'kode' => KodeRegister::KODE_JENIS[$nama] ?? null,
+                'per_unit' => in_array($satuan, ['unit', 'titik', 'buah'], true),
+            ]);
         }
         \App\Models\Pengaturan::simpan('tahun_ssh', now()->year);
 
@@ -41,7 +46,7 @@ class DatabaseSeeder extends Seeder
             'Karang Bintang' => ['Karang Bintang', 'Manuntung', 'Rejosari', 'Pandan Sari'],
         ];
         foreach ($wilayah as $kec => $desa) {
-            $k = Kecamatan::create(['nama' => $kec]);
+            $k = Kecamatan::create(['nama' => $kec, 'kode' => KodeRegister::KODE_KECAMATAN[$kec] ?? null]);
             foreach ($desa as $d) {
                 Desa::create(['kecamatan_id' => $k->id, 'nama' => $d]);
             }

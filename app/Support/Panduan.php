@@ -42,6 +42,8 @@ class Panduan
         'keputusan' => 'Keputusan usulan',
         'pagu-ditunda' => 'Ditunda & pagu',
         'pemeliharaan' => 'Pemeliharaan',
+        'aset' => 'Aset terpasang',
+        'pindai-qr' => 'Info perlengkapan (pindai QR)',
         'laporan' => 'Laporan',
         'pengaturan-ssh' => 'Harga SSH',
         'pengaturan-pengguna' => 'Pengguna & instansi',
@@ -191,6 +193,8 @@ class Panduan
             'usulan.ubah' => 'revisi',
             'pemeliharaan' => $user->isPengusul() ? 'laporan-saya' : 'pemeliharaan',
             'lapor' => 'lapor-kerusakan',
+            'terpasang' => 'aset',
+            'aset' => 'pindai-qr',
             'laporan' => 'laporan',
             'pengaturan' => match ($tab) {
                 'pengguna', 'instansi' => 'pengaturan-pengguna',

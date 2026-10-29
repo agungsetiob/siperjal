@@ -15,10 +15,12 @@ Route::livewire('/lapor/status/{nomor}', 'pages::pemeliharaan.publik')->name('la
 Route::livewire('/lapor/aset/{item}', 'pages::pemeliharaan.publik')->whereNumber('item')->name('lapor.aset');
 // tautan lama berbasis id item usulan (QR/pesan yang sudah tersebar) → perlengkapan terpasangnya
 Route::get('/lapor/{item}', function (int $item) {
-    $aset = \App\Models\PerlengkapanTerpasang::where('usulan_item_id', $item)->firstOrFail();
+    $aset = \App\Models\PerlengkapanTerpasang::where('usulan_item_id', $item)->orderBy('id')->firstOrFail();
 
     return redirect()->route('lapor.aset', $aset->id, 301);
 })->whereNumber('item')->name('lapor.item');
+// Halaman pindai QR: info unit + riwayat pemeliharaan, tanpa akun
+Route::livewire('/aset/{kode}', 'pages::aset.publik')->where('kode', '[A-Za-z0-9\-]+')->name('aset');
 Route::livewire('/masuk', 'pages::masuk')->middleware('guest')->name('masuk');
 Route::redirect('/login', '/masuk')->name('login');
 
@@ -49,6 +51,8 @@ Route::middleware(['auth', 'aktif'])->group(function () {
 
     // Perlengkapan terpasang (termasuk yang terpasang sebelum SIPERJAL): Dishub mengelola, admin melihat
     Route::livewire('/terpasang', 'pages::terpasang.index')->middleware('role:dishub,admin')->name('terpasang');
+    Route::get('/terpasang/unduh', \App\Http\Controllers\AsetExportController::class)->middleware('role:dishub,admin')->name('terpasang.unduh');
+    Route::post('/terpasang/label', \App\Http\Controllers\LabelQrController::class)->middleware('role:dishub,admin')->name('terpasang.label');
     Route::get('/terpasang/template.xlsx', \App\Http\Controllers\TemplateTerpasangController::class)->middleware('role:dishub')->name('terpasang.template');
 
     Route::get('/panduan/menu', [PanduanController::class, 'menu'])->name('panduan.menu');

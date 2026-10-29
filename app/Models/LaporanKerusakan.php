@@ -348,6 +348,7 @@ class LaporanKerusakan extends Model
     {
         $this->simpanFoto($foto, 'hasil');
         $this->update(['status' => SL::Selesai, 'selesai_at' => now(), 'catatan_selesai' => $catatan ?: null, 'ditutup_oleh' => auth()->id()]);
+        $this->catatPemeliharaan($catatan);
         $this->item?->usulan->catat("{$this->item->jenis->namaPendek()} selesai diperbaiki ({$this->nomor})", $catatan ?: null);
         $hasil = $this->fotoJenis('hasil')->last()?->url();
         $isi = "{$this->judul()} di {$this->lokasi()} sudah diperbaiki. Terima kasih sudah melapor!";
@@ -363,6 +364,46 @@ class LaporanKerusakan extends Model
         }
     }
 
+    /** Catatan pemeliharaan yang berasal dari laporan ini (ada setelah laporan selesai dan tertaut ke unit). */
+    public function pemeliharaan()
+    {
+        return $this->hasOne(Pemeliharaan::class);
+    }
+
+    /** Laporan selesai = satu catatan pemeliharaan di riwayat unitnya (foto hasil dipakai bersama, tidak disalin). */
+    private function catatPemeliharaan(?string $catatan): void
+    {
+        if (! $this->perlengkapan_terpasang_id) {
+            return;
+        }
+        $p = Pemeliharaan::updateOrCreate(['laporan_kerusakan_id' => $this->id], [
+            'perlengkapan_terpasang_id' => $this->perlengkapan_terpasang_id,
+            'tanggal' => ($this->selesai_at ?? now())->toDateString(),
+            'kegiatan' => in_array($this->kerusakan, ['hilang', 'roboh'], true) ? 'penggantian' : 'perbaikan',
+            'catatan' => $catatan ?: null,
+            'petugas_id' => $this->ditutup_oleh ?? auth()->id(),
+        ]);
+        $p->foto()->delete();
+        $this->fotoJenis('hasil')->each(fn ($f) => $p->foto()->create(['path' => $f->path]));
+    }
+
+    /**
+     * Isi riwayat unit dari laporan yang sudah selesai sebelum ada catatan pemeliharaan (data lama, seeder).
+     *
+     * @return int jumlah catatan yang dibuat
+     */
+    public static function isiRiwayatDariLaporanSelesai(): int
+    {
+        $n = 0;
+        static::with('foto')->where('status', SL::Selesai)->whereNotNull('perlengkapan_terpasang_id')->whereDoesntHave('pemeliharaan')->get()
+            ->each(function (self $l) use (&$n) {
+                $l->catatPemeliharaan($l->catatan_selesai);
+                $n++;
+            });
+
+        return $n;
+    }
+
     /** Urungkan "Selesai diperbaiki" (10 menit). */
     public function batalSelesai(): void
     {
@@ -375,6 +416,7 @@ class LaporanKerusakan extends Model
             Storage::disk('public')->delete($f->path);
             $f->delete();
         });
+        Pemeliharaan::where('laporan_kerusakan_id', $this->id)->delete();
         $this->update(['status' => SL::MenungguPerbaikan, 'selesai_at' => null, 'catatan_selesai' => null, 'ditutup_oleh' => null]);
         $this->item?->usulan->riwayat()->where('aksi', 'like', "%selesai diperbaiki ({$this->nomor})")->where('created_at', '>=', now()->subMinutes(10))->delete();
     }

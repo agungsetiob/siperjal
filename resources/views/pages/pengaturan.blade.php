@@ -9,6 +9,7 @@ use App\Models\LogPengaturan;
 use App\Models\Pengaturan;
 use App\Models\RuasJalan;
 use App\Models\User;
+use App\Support\KodeRegister;
 use App\Support\PetaConfig;
 use App\Models\UsulanItem;
 use Illuminate\Database\Eloquent\Model;
@@ -51,7 +52,7 @@ new #[Layout('layouts.app')] class extends Component
     private const LABEL = [
         'nama' => 'nama', 'name' => 'nama', 'deskripsi' => 'keterangan', 'satuan' => 'satuan', 'ikon' => 'ikon', 'warna' => 'warna',
         'email' => 'email', 'no_hp' => 'no. HP', 'instansi_id' => 'instansi', 'jenis' => 'jenis', 'kecamatan_id' => 'kecamatan',
-        'status' => 'status', 'kewenangan' => 'kewenangan',
+        'status' => 'status', 'kewenangan' => 'kewenangan', 'kode' => 'kode', 'per_unit' => 'pencatatan',
     ];
 
     public function boot(): void
@@ -82,7 +83,7 @@ new #[Layout('layouts.app')] class extends Component
     {
         return JenisPerlengkapan::orderBy('urutan')
             ->when($this->cari, fn ($q) => $q->where('nama', 'like', "%{$this->cari}%"))
-            ->withCount('items')
+            ->withCount(['items', 'aset', 'aset as aset_belum_berkode' => fn ($q) => $q->whereNull('kode')])
             ->get();
     }
 
@@ -152,6 +153,7 @@ new #[Layout('layouts.app')] class extends Component
             'unique' => ucfirst($label).' sudah dipakai.',
             'email' => 'Format email belum benar.',
             'max' => ucfirst($label).' terlalu panjang (maks. :max huruf).',
+            'kode.regex' => 'Kode 2–4 huruf, tanpa angka atau spasi.',
         ]);
         if ($v->fails()) {
             $this->versi++;
@@ -194,13 +196,29 @@ new #[Layout('layouts.app')] class extends Component
     public function ubahJenis(int $id, string $kolom, $nilai): void
     {
         $j = JenisPerlengkapan::findOrFail($id);
+        if ($kolom === 'kode') {
+            $nilai = strtoupper(trim((string) $nilai));
+        }
         $this->ubahIsian($j, $kolom, $nilai, [
             'nama' => 'required|string|max:100',
             'deskripsi' => 'nullable|string|max:150',
             'satuan' => 'required|string|max:20',
             'ikon' => ['required', 'string', 'max:50', self::ikonAda()],
             'warna' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'kode' => ['nullable', 'regex:/^[A-Za-z]{2,4}$/', Rule::unique('jenis_perlengkapan', 'kode')->ignore($j->id)],
+            'per_unit' => 'required|boolean',
         ], $j->namaPendek());
+        $this->kodekanYangMenunggu($kolom, jenisId: $j->id);
+    }
+
+    /** Setelah kode singkat diisi: unit yang menunggu kode langsung dikodekan (kode yang sudah ada tidak berubah). */
+    private function kodekanYangMenunggu(string $kolom, ?int $jenisId = null, ?int $kecamatanId = null): void
+    {
+        if ($kolom !== 'kode' || ! ($n = KodeRegister::lengkapi($jenisId, $kecamatanId))) {
+            return;
+        }
+        LogPengaturan::catat("{$n} unit perlengkapan terpasang mendapat kode register");
+        $this->dispatch('toast', pesan: "{$n} unit terpasang mendapat kode register");
     }
 
     public function salinSsh(): void
@@ -308,6 +326,15 @@ new #[Layout('layouts.app')] class extends Component
         $this->ubahIsian($k, 'nama', $nilai, ['nama' => 'required|string|max:100'], "Kecamatan {$k->nama}");
     }
 
+    public function ubahKodeKecamatan(int $id, $nilai): void
+    {
+        $k = Kecamatan::findOrFail($id);
+        $this->ubahIsian($k, 'kode', strtoupper(trim((string) $nilai)), [
+            'kode' => ['nullable', 'regex:/^[A-Za-z]{2,4}$/', Rule::unique('kecamatan', 'kode')->ignore($k->id)],
+        ], "Kecamatan {$k->nama}");
+        $this->kodekanYangMenunggu('kode', kecamatanId: $k->id);
+    }
+
     public function ubahDesa(int $id, $nilai): void
     {
         $d = Desa::findOrFail($id);
@@ -351,7 +378,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->form = match ($dialog) {
             'pengguna' => ['name' => '', 'email' => '', 'no_hp' => '', 'role' => 'pengusul', 'instansi_id' => ''],
             'instansi' => ['nama' => '', 'jenis' => 'desa', 'kecamatan_id' => ''],
-            'jenis' => ['nama' => '', 'deskripsi' => '', 'ikon' => 'triangle-alert', 'satuan' => 'unit', 'harga_satuan' => '', 'warna' => '#4556A9'],
+            'jenis' => ['nama' => '', 'kode' => '', 'deskripsi' => '', 'ikon' => 'triangle-alert', 'satuan' => 'unit', 'harga_satuan' => '', 'warna' => '#4556A9'],
             'ruas' => ['nama' => '', 'status' => '', 'kewenangan' => 'kabupaten'],
         };
         $this->dialog = $dialog;
@@ -359,10 +386,13 @@ new #[Layout('layouts.app')] class extends Component
 
     public function simpanDialog(): void
     {
+        if ($this->dialog === 'jenis') {
+            $this->form['kode'] = strtoupper(trim((string) ($this->form['kode'] ?? '')));
+        }
         $aturan = match ($this->dialog) {
             'pengguna' => ['form.name' => 'required|max:100', 'form.email' => 'required|email|unique:users,email', 'form.no_hp' => 'nullable|max:20', 'form.role' => 'required|in:'.implode(',', array_keys(User::pilihanPeran())), 'form.instansi_id' => 'nullable|exists:instansi,id'],
             'instansi' => ['form.nama' => 'required|max:150', 'form.jenis' => 'required|in:'.implode(',', array_keys(Instansi::JENIS)), 'form.kecamatan_id' => 'nullable|exists:kecamatan,id'],
-            'jenis' => ['form.nama' => 'required|max:100', 'form.deskripsi' => 'nullable|max:150', 'form.ikon' => ['required', 'max:50', self::ikonAda()], 'form.satuan' => 'required|max:20', 'form.harga_satuan' => 'required|integer|min:0', 'form.warna' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/']],
+            'jenis' => ['form.nama' => 'required|max:100', 'form.kode' => ['nullable', 'regex:/^[A-Z]{2,4}$/', 'unique:jenis_perlengkapan,kode'], 'form.deskripsi' => 'nullable|max:150', 'form.ikon' => ['required', 'max:50', self::ikonAda()], 'form.satuan' => 'required|max:20', 'form.harga_satuan' => 'required|integer|min:0', 'form.warna' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/']],
             'ruas' => ['form.nama' => 'required|max:150', 'form.status' => 'nullable|in:'.implode(',', array_keys(self::STATUS_RUAS)), 'form.kewenangan' => 'nullable|in:'.implode(',', array_keys(self::KEWENANGAN_RUAS))],
         };
         $data = array_map(fn ($v) => $v === '' ? null : $v, $this->validate($aturan)['form']);
@@ -370,7 +400,7 @@ new #[Layout('layouts.app')] class extends Component
         match ($this->dialog) {
             'pengguna' => User::create(['role' => $data['role'] === 'dishub_lapangan' ? Role::Dishub : $data['role'], 'petugas_lapangan' => $data['role'] === 'dishub_lapangan'] + $data + ['email_verified_at' => now()]),
             'instansi' => Instansi::create($data),
-            'jenis' => JenisPerlengkapan::create($data + ['urutan' => JenisPerlengkapan::max('urutan') + 1]),
+            'jenis' => JenisPerlengkapan::create($data + ['urutan' => JenisPerlengkapan::max('urutan') + 1, 'per_unit' => in_array(strtolower($data['satuan']), ['unit', 'titik', 'buah'], true)]),
             'ruas' => RuasJalan::create($data),
         };
         LogPengaturan::catat(ucfirst($this->dialog === 'ruas' ? 'ruas jalan' : $this->dialog).' '.($data['name'] ?? $data['nama']).' ditambahkan');
@@ -387,7 +417,7 @@ new #[Layout('layouts.app')] class extends Component
     {
         return $this->view([
             'tahunSsh' => (int) Pengaturan::ambil('tahun_ssh', now()->year),
-            'semuaKecamatan' => Kecamatan::with('desa')->orderBy('nama')->get(),
+            'semuaKecamatan' => Kecamatan::with('desa')->withCount(['aset', 'aset as aset_belum_berkode' => fn ($q) => $q->whereNull('kode')])->orderBy('nama')->get(),
             'semuaInstansi' => Instansi::orderBy('nama')->get(),
             'ruas' => RuasJalan::orderBy('nama')->get(),
         ])->title('Pengaturan · SIPERJAL');
@@ -449,9 +479,9 @@ new #[Layout('layouts.app')] class extends Component
             {{-- ── Perlengkapan ── --}}
             @if ($tab === 'perlengkapan')
                 <div class="overflow-x-auto rounded-md outline outline-1 -outline-offset-1 outline-line">
-                    <div class="min-w-[760px]">
+                    <div class="min-w-[960px]">
                         <div class="flex gap-5 border-b border-line bg-surface-muted px-5 py-3 {{ $th }}">
-                            <span class="flex-1">Jenis</span><span class="w-[110px]">Satuan</span><span class="w-[200px]">Harga satuan {{ $tahunSsh }}</span><span class="w-[90px]">Dipakai</span><span class="w-[60px]">Aktif</span>
+                            <span class="flex-1">Jenis</span><span class="w-[84px]">Kode</span><span class="w-[170px]">Satuan · Kode</span><span class="w-[200px]">Harga satuan {{ $tahunSsh }}</span><span class="w-[90px]">Dipakai</span><span class="w-[60px]">Aktif</span>
                         </div>
                         @foreach ($this->jenis as $j)
                             <div class="group flex items-center gap-5 border-b border-line bg-bg px-5 py-3 last:border-b-0 focus-within:bg-accent-soft" wire:key="j-{{ $j->id }}-{{ $versi }}">
@@ -482,9 +512,19 @@ new #[Layout('layouts.app')] class extends Component
                                     <div class="flex min-w-0 flex-1 flex-col">
                                         <input value="{{ $j->nama }}" @change="$wire.ubahJenis({{ $j->id }}, 'nama', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Nama" @class([$isi, 'w-full text-[15px] font-semibold', 'text-fg-muted' => ! $j->aktif])>
                                         <input value="{{ $j->deskripsi }}" @change="$wire.ubahJenis({{ $j->id }}, 'deskripsi', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Keterangan singkat" placeholder="{{ $j->aktif ? 'Tambah keterangan singkat' : 'Tidak muncul di formulir' }}" class="{{ $isi }} w-full py-1 font-caption text-[13px] text-fg-muted placeholder:text-fg-muted/70">
+                                        @if (! $j->kode)
+                                            <span class="flex items-center gap-1.5 px-2 pb-0.5 font-caption text-xs font-medium text-warning">@svg('lucide-circle-alert', 'size-3.5') Belum ada kode — unit baru tetap tercatat, kode menyusul{{ $j->aset_belum_berkode ? " ({$j->aset_belum_berkode} unit menunggu)" : '' }}</span>
+                                        @endif
                                     </div>
                                 </div>
-                                <input value="{{ $j->satuan }}" @change="$wire.ubahJenis({{ $j->id }}, 'satuan', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Satuan" class="{{ $isi }} w-[110px] font-caption text-sm">
+                                <input value="{{ $j->kode }}" @change="$wire.ubahJenis({{ $j->id }}, 'kode', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Kode singkat {{ $j->namaPendek() }}" placeholder="Isi" maxlength="4" @class([$isi, 'w-[84px] font-caption text-sm font-semibold uppercase tracking-wide', 'bg-warning-bg' => ! $j->kode])>
+                                <div class="flex w-[170px] flex-col gap-1">
+                                    <input value="{{ $j->satuan }}" @change="$wire.ubahJenis({{ $j->id }}, 'satuan', $event.target.value)" @keydown.enter="$el.blur()" aria-label="Satuan" class="{{ $isi }} w-full font-caption text-sm">
+                                    <select wire:change="ubahJenis({{ $j->id }}, 'per_unit', $event.target.value)" aria-label="Pencatatan kode" class="{{ $sel }} w-full py-1 text-xs" title="Per unit: tiap unit dapat kode sendiri. Per ruas: satu kode untuk satu ruas/paket berapa pun jumlahnya.">
+                                        <option value="1" @selected($j->per_unit)>Per unit</option>
+                                        <option value="0" @selected(! $j->per_unit)>Per ruas</option>
+                                    </select>
+                                </div>
                                 <label class="flex w-[200px] items-center gap-1.5 rounded-sm bg-bg px-3 py-[9px] font-caption text-sm outline outline-1 -outline-offset-1 outline-line focus-within:outline-2 focus-within:outline-accent"
                                        x-data="{ v: '{{ number_format($j->harga_satuan, 0, ',', '.') }}' }">
                                     <span class="text-fg-muted">Rp</span>
@@ -618,10 +658,17 @@ new #[Layout('layouts.app')] class extends Component
                                 <div class="px-5 py-2.5" wire:key="k-{{ $k->id }}-{{ $versi }}" x-data="{ buka: false }">
                                     <div class="flex items-center gap-2">
                                         <input value="{{ $k->nama }}" @change="$wire.ubahKecamatan({{ $k->id }}, $event.target.value)" @keydown.enter="$el.blur()" aria-label="Nama kecamatan" class="{{ $isi }} min-w-0 flex-1 text-[15px] font-semibold">
+                                        <input value="{{ $k->kode }}" @change="$wire.ubahKodeKecamatan({{ $k->id }}, $event.target.value)" @keydown.enter="$el.blur()" aria-label="Kode singkat kecamatan {{ $k->nama }}" placeholder="Kode" maxlength="4" @class([$isi, 'w-14 shrink-0 px-1 text-center font-caption text-sm font-semibold uppercase tracking-wide', 'bg-warning-bg' => ! $k->kode])>
+                                        <span class="hidden w-[58px] shrink-0 text-right font-caption text-[13px] text-fg-muted sm:block">{{ $k->aset_count ? $k->aset_count.' unit' : '—' }}</span>
                                         <button type="button" @click="buka = !buka" class="flex shrink-0 items-center gap-2 rounded-sm px-2 py-1.5 font-caption text-[13px] text-fg-muted hover:bg-surface-muted" :aria-expanded="buka">
                                             {{ $k->desa->count() }} desa <span class="transition" :class="buka && 'rotate-180'">@svg('lucide-chevron-down', 'size-4')</span>
                                         </button>
                                     </div>
+                                    @if (! $k->kode)
+                                        <span class="flex items-center gap-1.5 px-2 pt-0.5 font-caption text-xs font-medium text-warning">@svg('lucide-circle-alert', 'size-3.5') Belum ada kode — {{ $k->aset_count }} unit tercatat, kode menyusul</span>
+                                    @elseif ($k->aset_belum_berkode)
+                                        <span class="flex items-center gap-1.5 px-2 pt-0.5 font-caption text-xs text-fg-muted">{{ $k->aset_belum_berkode }} unit menunggu kode jenisnya atau tahun pasang</span>
+                                    @endif
                                     <div x-show="buka" x-cloak class="mt-2 flex flex-wrap gap-1.5 pb-1">
                                         @foreach ($k->desa as $d)
                                             <span class="flex items-center gap-0.5 rounded-full bg-surface-muted py-0.5 pl-1 pr-1.5 font-caption text-[13px] focus-within:bg-bg focus-within:outline focus-within:outline-2 focus-within:outline-accent" wire:key="d-{{ $d->id }}">
@@ -670,6 +717,20 @@ new #[Layout('layouts.app')] class extends Component
 
         {{-- ── Samping: SSH + riwayat ── --}}
         <aside class="flex w-full flex-col gap-8 lg:w-[360px] lg:shrink-0">
+            @if (in_array($tab, ['perlengkapan', 'wilayah']))
+                @php $contoh = $this->jenis->first(fn ($j) => $j->kode)?->kode ?? 'RMB'; $contohKec = $semuaKecamatan->first(fn ($k) => $k->kode)?->kode ?? 'BTL'; @endphp
+                <div class="flex flex-col gap-3 rounded-md bg-surface-soft p-6">
+                    <span class="font-caption text-[13px] font-semibold uppercase tracking-[0.3px] text-fg-muted">Susunan kode register</span>
+                    <span class="judul text-[28px] leading-8">{{ $contoh }}-001-{{ $contohKec }}-{{ now()->format('y') }}</span>
+                    <ul class="flex flex-col gap-1.5 text-sm leading-5 text-fg-muted">
+                        <li><b class="text-fg">{{ $contoh }}</b> kode jenis · Pengaturan → Perlengkapan</li>
+                        <li><b class="text-fg">001</b> nomor urut per jenis + kecamatan + tahun, tidak dipakai ulang</li>
+                        <li><b class="text-fg">{{ $contohKec }}</b> kode kecamatan · Pengaturan → Wilayah & Jalan</li>
+                        <li><b class="text-fg">{{ now()->format('y') }}</b> tahun pasang</li>
+                    </ul>
+                    <p class="text-sm leading-5 text-fg-muted">Kode 2–4 huruf, unik. Mengubah kode hanya berlaku untuk unit baru; label yang sudah tercetak tetap. <b class="text-fg">Per unit</b>: tiap unit dapat kode sendiri (rambu, lampu). <b class="text-fg">Per ruas</b>: satu kode untuk satu ruas/paket berapa pun jumlahnya (marka, guardrail, pita getar).</p>
+                </div>
+            @endif
             <div class="flex flex-col gap-4 rounded-md bg-surface-soft p-6">
                 <span class="font-caption text-[13px] font-semibold text-fg-muted">Standar Satuan Harga</span>
                 <span class="judul text-[40px] leading-10">SSH {{ $tahunSsh }}</span>
@@ -716,7 +777,7 @@ new #[Layout('layouts.app')] class extends Component
                     $isian = match ($dialog) {
                         'pengguna' => [['name', 'Nama', 'text'], ['email', 'Email', 'email'], ['no_hp', 'No. HP', 'tel'], ['role', 'Peran', User::pilihanPeran()], ['instansi_id', 'Instansi (khusus pengusul instansi)', ['' => '— Masyarakat / tidak ada —'] + $semuaInstansi->pluck('nama', 'id')->all()]],
                         'instansi' => [['nama', 'Nama instansi', 'text'], ['jenis', 'Jenis', Instansi::JENIS], ['kecamatan_id', 'Kecamatan', ['' => '—'] + $semuaKecamatan->pluck('nama', 'id')->all()]],
-                        'jenis' => [['nama', 'Nama', 'text'], ['deskripsi', 'Keterangan singkat', 'text'], ['satuan', 'Satuan', 'text'], ['harga_satuan', 'Harga satuan (Rp)', 'number'], ['ikon', 'Ikon (nama dari lucide.dev)', 'text'], ['warna', 'Warna pin', 'color']],
+                        'jenis' => [['nama', 'Nama', 'text'], ['kode', 'Kode singkat (2–4 huruf, mis. RMB)', 'text'], ['deskripsi', 'Keterangan singkat', 'text'], ['satuan', 'Satuan', 'text'], ['harga_satuan', 'Harga satuan (Rp)', 'number'], ['ikon', 'Ikon (nama dari lucide.dev)', 'text'], ['warna', 'Warna pin', 'color']],
                         'ruas' => [['nama', 'Nama ruas', 'text'], ['status', 'Status', ['' => '—'] + $this::STATUS_RUAS], ['kewenangan', 'Kewenangan', $this::KEWENANGAN_RUAS]],
                     };
                 @endphp

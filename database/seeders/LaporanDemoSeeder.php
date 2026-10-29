@@ -109,6 +109,9 @@ class LaporanDemoSeeder extends Seeder
         $dibuat = now()->subDays(1);
         $l->forceFill(['created_at' => $dibuat, 'updated_at' => $dibuat])->saveQuietly();
         $this->salin($l, $foto[0], 'pelapor', $dibuat);
+
+        // laporan yang sudah selesai jadi riwayat unitnya (seeder mengisi status langsung, bukan lewat selesai())
+        LaporanKerusakan::isiRiwayatDariLaporanSelesai();
     }
 
     private function salin(LaporanKerusakan $l, string $sumber, string $jenis, $waktu): void

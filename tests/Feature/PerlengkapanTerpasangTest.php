@@ -46,9 +46,11 @@ class PerlengkapanTerpasangTest extends TestCase
         $this->actingAs($this->user('dishub@usuljalan.test'));
 
         $item->tandaiTerpasang([['file' => UploadedFile::fake()->image('a.jpg')]], 2, null, null);
-        $aset = PerlengkapanTerpasang::where('usulan_item_id', $item->id)->firstOrFail();
-        $this->assertSame(2, $aset->jumlah);
-        $this->assertSame([750000, 1500000], [$aset->harga_satuan, $aset->nilai()]); // harga terkunci Bappeda ikut
+        $unit = PerlengkapanTerpasang::where('usulan_item_id', $item->id)->orderBy('id')->get();
+        $this->assertCount(2, $unit); // rambu dihitung per unit: dua unit, satu baris satu unit
+        $aset = $unit->first();
+        $this->assertSame([1, 1], $unit->pluck('jumlah')->all());
+        $this->assertSame([750000, 750000], [$aset->harga_satuan, $aset->nilai()]); // harga terkunci Bappeda ikut
         $this->assertEqualsWithDelta(-3.4492, $aset->lat, 0.00001);
         $this->assertFalse($aset->adalahLama());
 
@@ -119,16 +121,17 @@ class PerlengkapanTerpasangTest extends TestCase
             ->set('items.0.jenis', $jenis)->set('items.0.jumlah', 3)->set('tahun', 2015)
             ->call('aturLokasi', -3.46, 116.01, ['jalan' => 'Jl. Baru'])
             ->call('simpan')->assertHasNoErrors()->assertSet('dialog', null);
-        $a = PerlengkapanTerpasang::lama()->firstOrFail();
-        $this->assertSame([3, 2015, 'Jl. Baru', null], [$a->jumlah, $a->tahun, $a->alamat, $a->nilai()]);
+        $this->assertSame(3, PerlengkapanTerpasang::lama()->count()); // jumlah 3 → tiga unit
+        $a = PerlengkapanTerpasang::lama()->orderBy('id')->firstOrFail();
+        $this->assertSame([1, 2015, 'Jl. Baru', null], [$a->jumlah, $a->tahun, $a->alamat, $a->nilai()]);
 
         Livewire::test('pages::terpasang.index')
-            ->call('ubah', $a->id)->assertSet('items.0.jumlah', 3)
+            ->call('ubah', $a->id)->assertSet('items.0.jumlah', 1)
             ->set('items.0.jumlah', 5)->set('items.0.harga', '200000')->call('simpan');
-        $this->assertSame([5, 200000, 1000000], [$a->fresh()->jumlah, $a->fresh()->harga_satuan, $a->fresh()->nilai()]);
+        $this->assertSame([1, 200000, 200000], [$a->fresh()->jumlah, $a->fresh()->harga_satuan, $a->fresh()->nilai()]); // unit tetap satu
 
         Livewire::test('pages::terpasang.index')->call('hapus', $a->id);
-        $this->assertSame(0, PerlengkapanTerpasang::count());
+        $this->assertSame(2, PerlengkapanTerpasang::count());
     }
 
     public function test_satu_lokasi_beberapa_jenis_sekali_simpan(): void
@@ -144,12 +147,13 @@ class PerlengkapanTerpasangTest extends TestCase
             ->set('items.1.jenis', $a)
             ->call('simpan')->assertHasErrors(['items.1.jenis']) // jenis yang sama dua kali
             ->set('items.1.jenis', $b)->set('items.1.jumlah', 2)
-            ->call('simpan')->assertHasNoErrors()->assertDispatched('toast', pesan: '2 perlengkapan ditambahkan');
+            ->call('simpan')->assertHasNoErrors()->assertDispatched('toast', pesan: '5 unit ditambahkan');
 
         $rows = PerlengkapanTerpasang::lama()->orderBy('id')->get();
-        $this->assertCount(2, $rows);
-        $this->assertSame(['Simpang Lima', 'Simpang Lima'], $rows->pluck('alamat')->all());
-        $this->assertSame([6000000, null], $rows->map->nilai()->all());
+        $this->assertCount(5, $rows); // 4 rambu (per unit) + 1 baris marka (per ruas)
+        $this->assertSame(array_fill(0, 5, 'Simpang Lima'), $rows->pluck('alamat')->all());
+        $this->assertSame([1500000, 1500000, 1500000, 1500000, null], $rows->map->nilai()->all());
+        $this->assertSame([1, 1, 1, 1, 2], $rows->pluck('jumlah')->all());
         $this->get(route('terpasang'))->assertSee('nilai tercatat');
     }
 
@@ -202,9 +206,9 @@ class PerlengkapanTerpasangTest extends TestCase
         $this->assertCount(1, PerlengkapanTerpasang::all()); // pratinjau belum menyimpan
 
         $c->call('terapkanImpor')->assertSet('dialog', null)->assertDispatched('toast');
-        $this->assertSame(3, PerlengkapanTerpasang::count());
+        $this->assertSame(4, PerlengkapanTerpasang::count()); // 1 lama + baris jumlah 2 jadi 2 unit + 1 unit
         $batch = $c->get('batchTerakhir');
-        $this->assertSame([1250000, null], PerlengkapanTerpasang::where('batch', $batch)->orderBy('id')->pluck('harga_satuan')->all());
+        $this->assertSame([1250000, 1250000, null], PerlengkapanTerpasang::where('batch', $batch)->orderBy('id')->pluck('harga_satuan')->all());
 
         $c->dispatch('urungkan', token: 'impor-terpasang:'.$batch);
         $this->assertSame(1, PerlengkapanTerpasang::count());

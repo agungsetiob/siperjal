@@ -6,7 +6,9 @@ use App\Models\JenisPerlengkapan;
 use App\Models\Kecamatan;
 use App\Models\LogPengaturan;
 use App\Models\PerlengkapanTerpasang;
+use App\Models\Pemeliharaan;
 use App\Models\User;
+use App\Models\Usulan;
 use App\Notifications\PermintaanJenis;
 use App\Support\ImporTerpasang;
 use App\Support\Wilayah;
@@ -20,8 +22,9 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /**
- * Perlengkapan terpasang: yang dari usulan (otomatis) dan yang terpasang sebelum SIPERJAL (data lama).
- * Dishub mengelola data lama (tambah, ubah, hapus, impor Excel); admin hanya melihat.
+ * Aset: perlengkapan terpasang (dari usulan, otomatis, dan yang terpasang sebelum SIPERJAL) + riwayat pemeliharaannya.
+ * Daftar + panel detail (kode register, QR, linimasa), cetak label QR massal, unduh Excel/CSV.
+ * Dishub mengelola data lama (tambah, ubah, hapus, impor Excel) dan mencatat pemeliharaan; admin hanya melihat.
  */
 new #[Layout('layouts.app')] class extends Component
 {
@@ -34,6 +37,40 @@ new #[Layout('layouts.app')] class extends Component
 
     #[Url]
     public string $sumber = 'semua'; // semua | lama | usulan
+
+    #[Url]
+    public string $tab = 'terpasang'; // terpasang | riwayat
+
+    #[Url(as: 'id')]
+    public ?int $pilih = null;
+
+    #[Url]
+    public string $kondisi = 'semua'; // semua | rusak | belum_berkode
+
+    #[Url(as: 'kec')]
+    public ?int $kecamatanFilter = null;
+
+    public int $batas = 40;
+
+    /** Titik pengguna ([lat, lng], dari GPS peramban, tidak disimpan): daftar diurut terdekat dan menampilkan jarak. */
+    public ?array $dekat = null;
+
+    // Mode Pilih: cetak label QR massal
+    public bool $tandai = false;
+    public array $terpilih = [];
+    public string $ukuranLabel = 'sedang'; // sedang | kecil
+
+    // Riwayat
+    #[Url]
+    public string $rentang = 'tujuh'; // hari | tujuh | bulan | pilih
+    public ?string $dari = null;
+    public ?string $sampai = null;
+    #[Url(as: 'asal')]
+    public string $sumberRiwayat = 'semua'; // semua | laporan | rutin
+    #[Url(as: 'petugas')]
+    public ?int $petugasFilter = null;
+
+    public const MAKS_LABEL = 200;
 
     public ?string $dialog = null; // form | impor
 
@@ -67,26 +104,63 @@ new #[Layout('layouts.app')] class extends Component
         abort_unless(auth()->user()?->hasRole(Role::Dishub, Role::Admin), 403);
     }
 
+    public function mount(): void
+    {
+        // petugas lapangan membuka Riwayat: bawaannya catatan miliknya
+        if (auth()->user()->isPetugasLapangan() && $this->tab === 'riwayat' && ! $this->petugasFilter) {
+            $this->petugasFilter = auth()->id();
+        }
+    }
+
     /** Hanya Dishub yang mengelola; admin melihat. */
     #[Computed]
     public function kelola(): bool
     {
-        return auth()->user()->hasRole(Role::Dishub, Role::Admin);
+        return auth()->user()->hasRole(Role::Dishub);
+    }
+
+    /** Saringan daftar aset (dipakai daftar, hitungan, dan unduhan). */
+    private function saringan(): array
+    {
+        return ['cari' => $this->cari, 'jenis' => $this->jenisFilter, 'kecamatan' => $this->kecamatanFilter, 'sumber' => $this->sumber, 'kondisi' => $this->kondisi];
+    }
+
+    private function queryDaftar()
+    {
+        return PerlengkapanTerpasang::saring($this->saringan());
     }
 
     #[Computed]
     public function daftar()
     {
-        return PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'usulanItem.usulan', 'laporanTerbuka')
-            ->when($this->jenisFilter, fn ($q) => $q->where('jenis_perlengkapan_id', $this->jenisFilter))
-            ->when($this->sumber === 'lama', fn ($q) => $q->lama())
-            ->when($this->sumber === 'usulan', fn ($q) => $q->whereNotNull('usulan_item_id'))
-            ->when(trim($this->cari) !== '', fn ($q) => $q->where(fn ($w) => $w
-                ->where('alamat', 'like', "%{$this->cari}%")
-                ->orWhereHas('desa', fn ($d) => $d->where('nama', 'like', "%{$this->cari}%"))
-                ->orWhereHas('kecamatan', fn ($d) => $d->where('nama', 'like', "%{$this->cari}%"))
-                ->orWhereHas('jenis', fn ($d) => $d->where('nama', 'like', "%{$this->cari}%"))))
-            ->latest('id')->limit(300)->get();
+        $q = $this->queryDaftar()
+            ->with('jenis', 'desa', 'kecamatan', 'usulanItem.usulan', 'laporanTerbuka')
+            ->withMax('pemeliharaan as dirawat_terakhir', 'tanggal');
+        if ($this->dekat) {
+            [$lat, $lng] = $this->dekat;
+            $q->orderByRaw('((lat - ?) * (lat - ?)) + ((lng - ?) * (lng - ?)) * 0.98', [$lat, $lat, $lng, $lng]);
+        } else {
+            $q->latest('id');
+        }
+
+        return $q->limit($this->batas)->get()->each(fn ($a) => $this->dekat ? $a->jarak = Usulan::jarak($this->dekat[0], $this->dekat[1], $a->lat, $a->lng) : null);
+    }
+
+    public function urutDekat(float $lat, float $lng): void
+    {
+        $this->dekat = [round($lat, 6), round($lng, 6)];
+        $this->batas = 40;
+    }
+
+    public function hapusDekat(): void
+    {
+        $this->dekat = null;
+    }
+
+    #[Computed]
+    public function totalHasil(): int
+    {
+        return $this->queryDaftar()->count();
     }
 
     #[Computed]
@@ -96,7 +170,167 @@ new #[Layout('layouts.app')] class extends Component
             'semua' => PerlengkapanTerpasang::count(),
             'lama' => PerlengkapanTerpasang::lama()->count(),
             'nilai' => (int) PerlengkapanTerpasang::sum(DB::raw('jumlah * harga_satuan')), // harga kosong tidak dihitung
+            'rusak' => PerlengkapanTerpasang::whereHas('laporanTerbuka')->count(),
+            'belum_berkode' => PerlengkapanTerpasang::belumBerkode()->count(),
         ];
+    }
+
+    /** Unit yang sedang dibuka di panel detail. */
+    #[Computed]
+    public function aset(): ?PerlengkapanTerpasang
+    {
+        return $this->pilih ? PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka', 'usulanItem.fotoHasil', 'usulanItem.usulan.instansi',
+            'pemeliharaan.petugas', 'pemeliharaan.foto', 'pemeliharaan.laporan')->find($this->pilih) : null;
+    }
+
+    /** Siapa yang menandai terpasang (dari riwayat usulan), untuk linimasa. */
+    #[Computed]
+    public function penandaTerpasang(): ?string
+    {
+        $u = $this->aset?->usulanItem?->usulan;
+
+        return $u?->riwayat()->where('aksi', 'like', '% terpasang')->with('user')->latest('id')->first()?->user?->name;
+    }
+
+    /** Rentang tanggal Riwayat: [dari, sampai] (Y-m-d). */
+    #[Computed]
+    public function rentangTanggal(): array
+    {
+        return match ($this->rentang) {
+            'hari' => [today()->toDateString(), today()->toDateString()],
+            'bulan' => [today()->startOfMonth()->toDateString(), today()->toDateString()],
+            'pilih' => [$this->dari ?: null, $this->sampai ?: null],
+            default => [today()->subDays(6)->toDateString(), today()->toDateString()],
+        };
+    }
+
+    private function saringanRiwayat(): array
+    {
+        [$dari, $sampai] = $this->rentangTanggal;
+
+        return ['dari' => $dari, 'sampai' => $sampai, 'jenis' => $this->jenisFilter, 'kecamatan' => $this->kecamatanFilter,
+            'sumber' => $this->sumberRiwayat, 'petugas' => $this->petugasFilter, 'cari' => $this->cari];
+    }
+
+    #[Computed]
+    public function riwayat()
+    {
+        return Pemeliharaan::with('aset.jenis', 'aset.kecamatan', 'aset.desa', 'petugas', 'laporan')
+            ->saring($this->saringanRiwayat())->orderByDesc('tanggal')->orderByDesc('id')->limit($this->batas)->get();
+    }
+
+    /** Jumlah catatan menurut asal, untuk ringkasan Riwayat. @return array{semua: int, laporan: int, rutin: int} */
+    #[Computed]
+    public function hitunganRiwayat(): array
+    {
+        $q = fn () => Pemeliharaan::saring([...$this->saringanRiwayat(), 'sumber' => 'semua']);
+
+        return ['semua' => $q()->count(), 'laporan' => $q()->whereNotNull('laporan_kerusakan_id')->count(), 'rutin' => $q()->whereNull('laporan_kerusakan_id')->count()];
+    }
+
+    /** Parameter unduhan sesuai tab dan saringan yang aktif. */
+    public function parameterUnduh(): array
+    {
+        return $this->tab === 'riwayat'
+            ? ['data' => 'riwayat'] + array_filter($this->saringanRiwayat(), fn ($v) => $v !== null && $v !== '' && $v !== 'semua')
+            : array_filter($this->saringan(), fn ($v) => $v !== null && $v !== '' && $v !== 'semua');
+    }
+
+    /** Boleh mencatat pemeliharaan (Dishub; admin hanya melihat). */
+    #[Computed]
+    public function bolehCatat(): bool
+    {
+        return Pemeliharaan::bolehMencatat(auth()->user());
+    }
+
+    // ── Navigasi daftar / detail
+    public function gantiTab(string $tab): void
+    {
+        abort_unless(in_array($tab, ['terpasang', 'riwayat'], true), 422);
+        $this->tab = $tab;
+        $this->batas = 40;
+        $this->tandai = false;
+        $this->pilih = null;
+        $this->petugasFilter = $tab === 'riwayat' && auth()->user()->isPetugasLapangan() ? auth()->id() : null;
+    }
+
+    public function pilihAset(int $id): void
+    {
+        if ($this->tandai) {
+            $this->terpilih = in_array($id, $this->terpilih, true) ? array_values(array_diff($this->terpilih, [$id])) : [...$this->terpilih, $id];
+
+            return;
+        }
+        $this->pilih = $id;
+    }
+
+    public function tutupDetail(): void
+    {
+        $this->pilih = null;
+    }
+
+    public function muatLagi(): void
+    {
+        $this->batas += 40;
+    }
+
+    public function updated(string $nama): void
+    {
+        if (in_array($nama, ['cari', 'jenisFilter', 'sumber', 'kondisi', 'kecamatanFilter', 'rentang', 'dari', 'sampai', 'sumberRiwayat', 'petugasFilter'], true)) {
+            $this->batas = 40;
+        }
+    }
+
+    public function hapusFilter(): void
+    {
+        $this->reset('cari', 'jenisFilter', 'sumber', 'kondisi', 'kecamatanFilter', 'sumberRiwayat', 'batas');
+        $this->petugasFilter = $this->tab === 'riwayat' && auth()->user()->isPetugasLapangan() ? auth()->id() : null;
+    }
+
+    public function saringKondisi(string $kondisi): void
+    {
+        $this->kondisi = $this->kondisi === $kondisi ? 'semua' : $kondisi;
+        $this->batas = 40;
+    }
+
+    // ── Mode Pilih (cetak label QR)
+    public function mulaiTandai(): void
+    {
+        $this->tandai = true;
+        $this->terpilih = [];
+    }
+
+    public function selesaiTandai(): void
+    {
+        $this->tandai = false;
+        $this->terpilih = [];
+    }
+
+    /** Pilih semua hasil saringan yang sudah berkode. */
+    public function pilihSemua(): void
+    {
+        $this->terpilih = $this->queryDaftar()->whereNotNull('kode')->orderBy('id')->limit(5000)->pluck('id')->all();
+    }
+
+    public function bersihkanPilihan(): void
+    {
+        $this->terpilih = [];
+    }
+
+    /** Hapus catatan pemeliharaan (koordinator; petugas hanya miliknya ≤10 menit; yang dari laporan tidak). */
+    public function hapusCatatan(int $id): void
+    {
+        $p = Pemeliharaan::findOrFail($id);
+        abort_unless($p->bolehDihapus(auth()->user()), 403);
+        $p->hapusCatat();
+        unset($this->aset, $this->riwayat, $this->hitunganRiwayat, $this->daftar);
+        $this->dispatch('toast', pesan: 'Catatan dihapus');
+    }
+
+    #[\Livewire\Attributes\On('pemeliharaan-dicatat')]
+    public function segarkan(): void
+    {
+        unset($this->aset, $this->riwayat, $this->hitunganRiwayat, $this->daftar);
     }
 
     // ── Tambah / ubah satu
@@ -197,13 +431,18 @@ new #[Layout('layouts.app')] class extends Component
         ]);
         $nama = JenisPerlengkapan::whereIn('id', $baris->pluck('jenis_perlengkapan_id'))->get()->map->namaPendek()->implode(', ');
         if ($this->ubahId) {
-            PerlengkapanTerpasang::lama()->findOrFail($this->ubahId)->update($baris->first());
+            $d = $baris->first();
+            // satu unit tetap satu unit: jumlah hanya bisa diubah untuk jenis per ruas/paket
+            if (JenisPerlengkapan::find($d['jenis_perlengkapan_id'])->per_unit) {
+                $d['jumlah'] = 1;
+            }
+            PerlengkapanTerpasang::lama()->findOrFail($this->ubahId)->update($d);
             LogPengaturan::catat("Perlengkapan terpasang {$nama} diubah");
             $pesan = 'Perubahan tersimpan';
         } else {
-            DB::transaction(fn () => $baris->each(fn ($d) => PerlengkapanTerpasang::create($d)));
+            $unit = DB::transaction(fn () => $baris->flatMap(fn ($d) => PerlengkapanTerpasang::buatUnit($d)));
             LogPengaturan::catat("Perlengkapan terpasang {$nama} ditambahkan (data lama)");
-            $pesan = $baris->count() > 1 ? "{$baris->count()} perlengkapan ditambahkan" : "{$nama} ditambahkan";
+            $pesan = $unit->count() > 1 ? "{$unit->count()} unit ditambahkan" : "{$nama} ditambahkan";
         }
         $this->tutup();
         unset($this->daftar, $this->jumlahSemua);
@@ -250,8 +489,8 @@ new #[Layout('layouts.app')] class extends Component
     {
         abort_unless($this->kelola, 403);
         $a = PerlengkapanTerpasang::lama()->with('jenis')->findOrFail($id);
-        if ($a->laporanKerusakan()->exists()) {
-            $this->dispatch('toast', pesan: 'Sudah punya laporan kerusakan, tidak bisa dihapus.', gagal: true);
+        if ($a->punyaRiwayat()) {
+            $this->dispatch('toast', pesan: 'Sudah punya riwayat (laporan atau pemeliharaan), tidak bisa dihapus.', gagal: true);
 
             return;
         }
@@ -316,10 +555,10 @@ new #[Layout('layouts.app')] class extends Component
     #[\Livewire\Attributes\On('urungkan')]
     public function urungkan(string $token): void
     {
-        abort_unless($this->kelola, 403);
         if (! str_starts_with($token, 'impor-terpasang:') || substr($token, 16) !== $this->batchTerakhir) {
             return;
         }
+        abort_unless($this->kelola, 403);
         $n = ImporTerpasang::batalkan($this->batchTerakhir);
         $this->batchTerakhir = null;
         unset($this->daftar, $this->jumlahSemua);
@@ -346,6 +585,7 @@ new #[Layout('layouts.app')] class extends Component
             'semuaJenis' => JenisPerlengkapan::orderBy('urutan')->get(),
             'semuaSatuan' => JenisPerlengkapan::distinct()->orderBy('satuan')->pluck('satuan'),
             'semuaKecamatan' => Kecamatan::orderBy('nama')->get(),
+            'petugasLapangan' => $this->tab === 'riwayat' ? User::where('role', Role::Dishub)->orderBy('name')->get(['id', 'name', 'petugas_lapangan']) : collect(),
             'desaPilihan' => $this->kecamatan_id ? Desa::where('kecamatan_id', $this->kecamatan_id)->orderBy('nama')->get() : collect(),
         ];
     }
@@ -357,69 +597,251 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
-<div class="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 sm:px-6 lg:py-10">
-    <x-kategori aktif="terpasang" class="max-w-md" />
+@php
+    $jml = $this->jumlahSemua;
+    $punyaSaringan = $cari !== '' || $jenisFilter || $kecamatanFilter || $sumber !== 'semua' || $kondisi !== 'semua' || ($tab === 'riwayat' && ($sumberRiwayat !== 'semua' || $petugasFilter));
+    $namaHari = fn (\Illuminate\Support\Carbon $t) => $t->isToday() ? 'Hari ini' : ($t->isYesterday() ? 'Kemarin' : $t->translatedFormat('l'));
+    $perLembar = ['sedang' => 24, 'kecil' => 65][$ukuranLabel] ?? 24;
+    $nTerpilih = count($terpilih);
+    $unduh = $this->parameterUnduh();
+    $sel = 'input py-2 text-sm';
+@endphp
+<div>
+<div class="lg:grid lg:h-[calc(100dvh-4rem)] lg:grid-cols-[440px_minmax(0,1fr)]">
+    {{-- ── Panel kiri: kepala + daftar ── --}}
+    <section @class(['flex min-h-0 flex-col border-r border-line bg-bg', 'hidden lg:flex' => $pilih && ! $tandai])>
+        <div class="flex flex-col gap-4 px-6 pt-5">
+            <x-kategori aktif="terpasang" />
+            <div class="flex items-center justify-between gap-2">
+                <h1 class="judul min-w-0 whitespace-nowrap text-[26px] leading-[28px] sm:text-[28px]">{{ $tandai ? 'Pilih untuk dicetak' : 'Aset' }}</h1>
+                <div class="flex shrink-0 items-center gap-1.5">
+                    @if ($tab === 'terpasang' && ! $tandai)
+                        <button type="button" wire:click="mulaiTandai" class="flex h-[30px] items-center gap-1.5 rounded-sm px-2.5 font-caption text-[13px] font-medium outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">@svg('lucide-square-check-big', 'size-4') Pilih</button>
+                    @endif
+                    @unless ($tandai)
+                        <div class="relative" x-data="{ buka: false }">
+                            <button type="button" @click="buka = !buka" class="flex h-[30px] items-center gap-1.5 rounded-sm px-2.5 font-caption text-[13px] font-medium outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted" :aria-expanded="buka">@svg('lucide-download', 'size-4') Unduh @svg('lucide-chevron-down', 'size-3.5')</button>
+                            <div x-show="buka" x-cloak @click.outside="buka = false" x-transition.opacity.duration.150ms class="absolute right-0 top-9 z-[1100] flex w-72 flex-col gap-1 rounded-md bg-bg p-2 shadow-lg outline outline-1 -outline-offset-1 outline-line">
+                                @foreach ($tab === 'riwayat' ? [['xlsx', 'Excel (.xlsx)', 'Catatan pemeliharaan sesuai saringan', 'file-spreadsheet'], ['csv', 'CSV', 'Untuk diolah di aplikasi lain', 'file-text'], ['pdf', 'PDF', 'Siap cetak', 'file']] : [['xlsx', 'Excel (.xlsx)', 'Koordinat jadi tautan Google Maps yang bisa diklik', 'file-spreadsheet'], ['csv', 'CSV', 'Untuk diolah di aplikasi lain; koordinat sebagai teks', 'file-text']] as [$fmt, $judulFmt, $ket, $ikonFmt])
+                                    <a href="{{ route('terpasang.unduh', $unduh + ['format' => $fmt]) }}" class="flex items-start gap-3 rounded-sm p-2.5 hover:bg-surface-muted">
+                                        <span class="mt-0.5 text-accent">@svg('lucide-'.$ikonFmt, 'size-5')</span>
+                                        <span class="flex flex-col"><span class="text-sm font-semibold">{{ $judulFmt }}</span><span class="text-xs leading-4 text-fg-muted">{{ $ket }}</span></span>
+                                    </a>
+                                @endforeach
+                                <span class="px-2.5 pb-1 pt-0.5 font-caption text-[11px] leading-4 text-fg-muted">{{ $tab === 'riwayat' ? 'Kolom: tanggal, kode, jenis, lokasi, kegiatan, sumber, petugas, catatan.' : 'Kolom: kode, jenis, lokasi, koordinat, tahun, sumber, harga, status, pemeliharaan terakhir.' }} Mengikuti saringan yang aktif.</span>
+                            </div>
+                        </div>
+                        @if ($this->kelola)
+                            <div class="relative" x-data="{ buka: false }">
+                                <button type="button" @click="buka = !buka" class="grid size-[30px] place-items-center rounded-sm bg-accent text-fg-inverse hover:brightness-110" aria-label="Tambah data lama" :aria-expanded="buka">@svg('lucide-plus', 'size-4')</button>
+                                <div x-show="buka" x-cloak @click.outside="buka = false" class="absolute right-0 top-9 z-[1100] flex w-64 flex-col rounded-md bg-bg p-1.5 shadow-lg outline outline-1 -outline-offset-1 outline-line">
+                                    <button type="button" wire:click="tambah" @click="buka = false" class="flex items-center gap-2.5 rounded-sm p-2.5 text-left text-sm font-semibold hover:bg-surface-muted">@svg('lucide-plus', 'size-4 text-accent') Tambah perlengkapan lama</button>
+                                    <button type="button" wire:click="bukaImpor" @click="buka = false" class="flex items-center gap-2.5 rounded-sm p-2.5 text-left text-sm font-semibold hover:bg-surface-muted">@svg('lucide-file-spreadsheet', 'size-4 text-accent') Impor Excel</button>
+                                </div>
+                            </div>
+                        @endif
+                    @endunless
+                </div>
+            </div>
 
-    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-        <div class="flex flex-col gap-1">
-            <h1 class="judul text-[28px] leading-[30px] lg:text-[40px] lg:leading-[40px]">Perlengkapan terpasang</h1>
-            <span class="text-sm text-fg-muted">{{ number_format($this->jumlahSemua['semua'], 0, ',', '.') }} tercatat · {{ number_format($this->jumlahSemua['lama'], 0, ',', '.') }} terpasang sebelum SIPERJAL{!! $this->jumlahSemua['nilai'] ? ' · nilai tercatat <b class="font-semibold text-fg">Rp '.number_format($this->jumlahSemua['nilai'], 0, ',', '.').'</b>' : '' !!}. Semuanya tampil di peta beranda dan bisa dilaporkan rusak.</span>
+            @unless ($tandai)
+                <div class="flex gap-5 overflow-x-auto border-b border-line font-caption text-sm">
+                    @foreach (['terpasang' => ['Terpasang', $jml['semua']], 'riwayat' => ['Riwayat', null]] as $k => [$label, $n])
+                        <button type="button" wire:click="gantiTab('{{ $k }}')" @class(['-mb-px flex shrink-0 items-center gap-1.5 border-b-2 pb-2.5', 'border-accent font-semibold' => $tab === $k, 'border-transparent font-medium text-fg-muted hover:text-fg' => $tab !== $k])>
+                            {{ $label }}
+                            @if ($n) <span @class(['rounded-full px-[7px] py-px text-[11px] font-semibold', 'bg-accent text-fg-inverse' => $tab === $k, 'bg-surface-muted text-fg-muted' => $tab !== $k])>{{ number_format($n, 0, ',', '.') }}</span> @endif
+                        </button>
+                    @endforeach
+                </div>
+            @endunless
+
+            <div class="relative flex gap-2" x-data="{ buka: false }">
+                <label class="flex h-10 flex-1 items-center gap-2 rounded-sm bg-bg px-3 outline outline-1 -outline-offset-1 outline-line focus-within:outline-2 focus-within:outline-accent">
+                    @svg('lucide-search', 'size-4 shrink-0 text-fg-muted')
+                    <input wire:model.live.debounce.300ms="cari" class="w-full bg-transparent text-sm outline-none placeholder:text-fg-muted" placeholder="{{ $tab === 'riwayat' ? 'Cari kode register' : 'Cari kode, jenis, atau lokasi' }}">
+                </label>
+                <button type="button" @click="buka = !buka" @class(['flex h-10 items-center gap-1.5 rounded-sm px-3 font-caption text-[13px] font-medium outline outline-1 -outline-offset-1', 'outline-accent text-accent' => $jenisFilter || $kecamatanFilter || $sumber !== 'semua', 'outline-line' => ! ($jenisFilter || $kecamatanFilter || $sumber !== 'semua')])>@svg('lucide-sliders-horizontal', 'size-4') Filter</button>
+                <div x-show="buka" x-cloak @click.outside="buka = false" x-transition.opacity.duration.150ms class="absolute right-0 top-11 z-[1100] flex w-72 flex-col gap-2 rounded-md bg-bg p-3 shadow-lg outline outline-1 -outline-offset-1 outline-line">
+                    <span class="font-caption text-[11px] font-semibold uppercase tracking-[0.8px] text-fg-muted">Saring</span>
+                    <select wire:model.live="kecamatanFilter" class="{{ $sel }}" aria-label="Kecamatan"><option value="">Semua kecamatan</option>@foreach ($semuaKecamatan as $k)<option value="{{ $k->id }}">{{ $k->nama }}</option>@endforeach</select>
+                    <select wire:model.live="jenisFilter" class="{{ $sel }}" aria-label="Perlengkapan"><option value="">Semua perlengkapan</option>@foreach ($semuaJenis as $j)<option value="{{ $j->id }}">{{ $j->nama }}</option>@endforeach</select>
+                    @if ($tab === 'terpasang')
+                        <div class="flex gap-0.5 rounded-sm bg-surface-muted p-[3px] font-caption text-[12px]">
+                            @foreach (['semua' => 'Semua', 'lama' => 'Sebelum SIPERJAL', 'usulan' => 'Dari usulan'] as $v => $l)
+                                <button type="button" wire:click="$set('sumber', '{{ $v }}')" @class(['flex-1 rounded-sm py-1.5', 'bg-bg font-semibold shadow-sm' => $sumber === $v, 'font-medium text-fg-muted' => $sumber !== $v])>{{ $l }}</button>
+                            @endforeach
+                        </div>
+                    @else
+                        <select wire:model.live="petugasFilter" class="{{ $sel }}" aria-label="Petugas"><option value="">Semua petugas</option>@foreach ($petugasLapangan as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach</select>
+                    @endif
+                    @if ($punyaSaringan) <button type="button" wire:click="hapusFilter" @click="buka = false" class="self-start text-sm text-accent">Hapus saringan</button> @endif
+                </div>
+            </div>
+
+            @if ($tandai)
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 pb-3 font-caption text-[13px]">
+                    <span class="font-semibold">{{ $nTerpilih }} dipilih</span>
+                    <button type="button" wire:click="pilihSemua" class="font-semibold text-accent">Pilih semua hasil ({{ number_format($this->totalHasil, 0, ',', '.') }})</button>
+                    @if ($nTerpilih) <button type="button" wire:click="bersihkanPilihan" class="text-fg-muted hover:text-fg">Kosongkan</button> @endif
+                    <button type="button" wire:click="selesaiTandai" class="ml-auto font-semibold text-fg-muted hover:text-fg">Batal</button>
+                </div>
+            @elseif ($tab === 'terpasang')
+                <div class="flex flex-col gap-2.5 pb-3">
+                    <div class="flex flex-wrap items-center gap-x-2 font-caption text-xs text-fg-muted">
+                        <span class="font-semibold text-fg">{{ number_format($this->totalHasil, 0, ',', '.') }} unit</span>
+                        @if ($jml['nilai']) <span class="size-[3px] rounded-full bg-current"></span><span>nilai tercatat {{ \App\Support\Rekap::rupiahPendek($jml['nilai']) }}</span> @endif
+                    </div>
+                    <div class="flex flex-wrap gap-1.5" x-data="{ cari: false, galat: false,
+                            dekat() { if (! navigator.geolocation) { this.galat = true; return } this.cari = true; this.galat = false;
+                                navigator.geolocation.getCurrentPosition((p) => { this.cari = false; $wire.urutDekat(p.coords.latitude, p.coords.longitude) }, () => { this.cari = false; this.galat = true }, { enableHighAccuracy: true, timeout: 10000 }) } }">
+                        <button type="button" @if ($dekat) wire:click="hapusDekat" @else @click="dekat()" @endif @class(['flex items-center gap-1.5 rounded-full px-2.5 py-1 font-caption text-xs font-semibold outline outline-1 -outline-offset-1', 'bg-accent text-fg-inverse outline-accent' => $dekat, 'text-accent outline-line hover:bg-accent-soft' => ! $dekat])>@svg('lucide-locate-fixed', 'size-3.5') <span x-show="! cari">Dekat saya</span><span x-show="cari" x-cloak>Mencari lokasi…</span></button>
+                        <span x-show="galat" x-cloak class="self-center font-caption text-xs text-danger">Lokasi tidak bisa dibaca. Izinkan akses lokasi di peramban.</span>
+                    @if ($jml['rusak'] || $jml['belum_berkode'])
+                            @foreach ([['rusak', $jml['rusak'], 'dilaporkan rusak', 'triangle-alert'], ['belum_berkode', $jml['belum_berkode'], 'belum berkode', 'circle-dashed']] as [$k, $n, $l, $ik])
+                                @if ($n)
+                                    <button type="button" wire:click="saringKondisi('{{ $k }}')" @class(['flex items-center gap-1.5 rounded-full px-2.5 py-1 font-caption text-xs font-semibold outline outline-1 -outline-offset-1', 'bg-warning-bg text-warning outline-warning' => $kondisi === $k, 'text-warning outline-line hover:bg-warning-bg' => $kondisi !== $k])>@svg('lucide-'.$ik, 'size-3.5') {{ $n }} {{ $l }}</button>
+                                @endif
+                            @endforeach
+                    @endif
+                    </div>
+                </div>
+            @else
+                <div class="flex flex-col gap-2.5 pb-3">
+                    <div class="flex flex-wrap gap-1.5 font-caption text-[13px]">
+                        @foreach (['hari' => 'Hari ini', 'tujuh' => '7 hari', 'bulan' => 'Bulan ini', 'pilih' => 'Pilih tanggal'] as $v => $l)
+                            <button type="button" wire:click="$set('rentang', '{{ $v }}')" @class(['rounded-full px-3 py-1.5 outline outline-1 -outline-offset-1', 'bg-accent font-semibold text-fg-inverse outline-accent' => $rentang === $v, 'font-medium outline-line hover:bg-surface-muted' => $rentang !== $v])>{{ $l }}</button>
+                        @endforeach
+                    </div>
+                    @if ($rentang === 'pilih')
+                        <div class="flex items-center gap-2">
+                            <input type="date" wire:model.live="dari" class="input h-9 flex-1 py-0 text-sm" aria-label="Dari tanggal" max="{{ today()->toDateString() }}">
+                            <span class="text-fg-muted">–</span>
+                            <input type="date" wire:model.live="sampai" class="input h-9 flex-1 py-0 text-sm" aria-label="Sampai tanggal" max="{{ today()->toDateString() }}">
+                        </div>
+                    @endif
+                    @php $h = $this->hitunganRiwayat; @endphp
+                    <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 font-caption text-xs text-fg-muted">
+                        <span class="font-semibold text-fg">{{ $h['semua'] }} catatan</span>
+                        @if ($kecamatanFilter) <span class="size-[3px] rounded-full bg-current"></span><span>Kec. {{ $semuaKecamatan->firstWhere('id', $kecamatanFilter)?->nama }}</span> @endif
+                        @foreach (['laporan' => 'laporan', 'rutin' => 'rutin'] as $v => $l)
+                            <button type="button" wire:click="$set('sumberRiwayat', '{{ $sumberRiwayat === $v ? 'semua' : $v }}')" @class(['rounded-full px-2 py-0.5 font-semibold', 'bg-accent text-fg-inverse' => $sumberRiwayat === $v, 'bg-surface-muted' => $sumberRiwayat !== $v])>{{ $h[$v] }} {{ $l }}</button>
+                        @endforeach
+                        @if (auth()->user()->isPetugasLapangan())
+                            <button type="button" wire:click="$set('petugasFilter', {{ $petugasFilter ? 'null' : auth()->id() }})" @class(['rounded-full px-2 py-0.5 font-semibold', 'bg-accent text-fg-inverse' => $petugasFilter, 'bg-surface-muted' => ! $petugasFilter])>Catatan saya</button>
+                        @endif
+                    </div>
+                </div>
+            @endif
         </div>
-        @if ($this->kelola)
-            <div class="flex shrink-0 gap-2">
-                <x-tombol variant="kedua" wire:click="bukaImpor" ikon="file-spreadsheet">Impor Excel</x-tombol>
-                <x-tombol wire:click="tambah" ikon="plus">Tambah</x-tombol>
+
+        <div class="min-h-0 flex-1 overflow-y-auto border-t border-line pb-24 lg:pb-0">
+            @if ($tab === 'terpasang')
+                @forelse ($this->daftar as $a)
+                    <x-aset.baris :aset="$a" :aktif="$pilih === $a->id && ! $tandai" :tandai="$tandai" :dipilih="in_array($a->id, $terpilih, true)" wire:key="aset-{{ $a->id }}" />
+                @empty
+                    @if ($punyaSaringan)
+                        <x-kosong ikon="search-x" judul="Tidak ada yang cocok" teks="Coba kata kunci lain atau hapus saringan.">
+                            <button type="button" wire:click="hapusFilter" class="flex items-center gap-1.5 rounded-sm px-3 py-2 text-sm font-semibold outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted">@svg('lucide-x', 'size-4') Hapus saringan</button>
+                        </x-kosong>
+                    @else
+                        <x-kosong ikon="package" judul="Belum ada perlengkapan" :teks="$this->kelola ? 'Tambahkan satu per satu atau impor dari Excel.' : 'Belum ada yang tercatat.'" />
+                    @endif
+                @endforelse
+                @if ($this->daftar->count() < $this->totalHasil)
+                    <button type="button" wire:click="muatLagi" wire:loading.attr="disabled" wire:target="muatLagi" class="w-full py-4 text-center font-caption text-[13px] font-semibold text-accent hover:bg-surface-muted">Muat {{ min(40, $this->totalHasil - $this->daftar->count()) }} lagi · sisa {{ number_format($this->totalHasil - $this->daftar->count(), 0, ',', '.') }}</button>
+                @endif
+            @else
+                @forelse ($this->riwayat->groupBy(fn ($p) => $p->tanggal->toDateString()) as $tgl => $catatan)
+                    @php $t = \Illuminate\Support\Carbon::parse($tgl); @endphp
+                    <div class="flex items-center justify-between border-b border-line bg-surface-muted px-6 py-2 font-caption text-xs" wire:key="rt-{{ $tgl }}">
+                        <span class="font-semibold uppercase tracking-[0.6px]">{{ $namaHari($t) }}{{ $t->isToday() || $t->isYesterday() ? '' : '' }} · {{ $t->translatedFormat('j M Y') }}</span>
+                        <span class="text-fg-muted">{{ $catatan->count() }} catatan</span>
+                    </div>
+                    @foreach ($catatan as $p)
+                        <button type="button" wire:click="pilihAset({{ $p->perlengkapan_terpasang_id }})" wire:key="rc-{{ $p->id }}" @class(['flex w-full flex-col gap-1 border-b border-line px-6 py-3 text-left', 'bg-accent-soft' => $pilih === $p->perlengkapan_terpasang_id, 'hover:bg-surface-muted' => $pilih !== $p->perlengkapan_terpasang_id])>
+                            <span class="flex items-center justify-between gap-2">
+                                <span class="font-caption text-[13px] font-semibold tracking-wide">{{ $p->aset->kode ?? 'Belum berkode' }}</span>
+                                <span class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-caption text-[11px] font-semibold text-fg-muted">{{ $p->dariLaporan() ? $p->laporan?->nomor : 'Rutin' }}</span>
+                            </span>
+                            <span class="text-[15px] font-semibold">{{ $p->label() }}</span>
+                            <span class="flex items-center gap-1.5 truncate font-caption text-[13px] text-fg-muted">{{ $p->aset->jenis->namaPendek() }} · {{ $p->aset->alamat ?: ($p->aset->desa?->nama ?: ($p->aset->kecamatan?->nama ?? '-')) }}@if ($p->petugas)<span class="size-[3px] shrink-0 rounded-full bg-current"></span><span class="shrink-0">{{ str($p->petugas->name)->before(' ') }}</span>@endif</span>
+                        </button>
+                    @endforeach
+                @empty
+                    <x-kosong ikon="history" :judul="$punyaSaringan || $rentang !== 'tujuh' ? 'Tidak ada catatan' : 'Belum ada catatan pemeliharaan'" teks="Catatan muncul di sini saat laporan kerusakan selesai diperbaiki atau petugas mencatat pemeliharaan rutin." />
+                @endforelse
+                @if ($this->riwayat->count() >= $batas)
+                    <button type="button" wire:click="muatLagi" class="w-full py-4 text-center font-caption text-[13px] font-semibold text-accent hover:bg-surface-muted">Muat lebih banyak</button>
+                @endif
+            @endif
+        </div>
+
+        {{-- HP: bilah cetak saat memilih --}}
+        @if ($tandai)
+            <form method="POST" action="{{ route('terpasang.label') }}" target="_blank" class="fixed inset-x-0 bottom-0 z-[1001] flex items-center gap-2 border-t border-line bg-bg px-4 pb-6 pt-3 shadow-[0_-4px_12px_#0000000a] lg:hidden">
+                @csrf
+                @foreach (array_slice($terpilih, 0, self::MAKS_LABEL) as $id) <input type="hidden" name="ids[]" value="{{ $id }}"> @endforeach
+                <select name="ukuran" wire:model.live="ukuranLabel" class="input h-11 w-36 py-0 text-sm"><option value="sedang">Sedang 60×30</option><option value="kecil">Kecil 40×20</option></select>
+                <button @disabled(! $nTerpilih || $nTerpilih > self::MAKS_LABEL) class="flex h-11 flex-1 items-center justify-center gap-2 rounded-sm bg-accent text-sm font-semibold text-fg-inverse disabled:opacity-40">@svg('lucide-printer', 'size-4') Cetak {{ $nTerpilih }} label</button>
+            </form>
+        @endif
+    </section>
+
+    {{-- ── Panel kanan: detail / cetak label ── --}}
+    <section @class(['relative min-h-0 overflow-y-auto bg-bg', 'hidden lg:block' => ! $pilih || $tandai])>
+        <div wire:loading.delay.flex wire:target="pilihAset" class="absolute inset-0 z-[900] hidden flex-col gap-4 bg-inherit p-6 lg:px-8" aria-label="Memuat detail">
+            <span class="kerangka h-4 w-1/3"></span><span class="kerangka h-9 w-2/3"></span><div class="grid h-[200px] grid-cols-2 gap-3"><span class="kerangka h-full"></span><span class="kerangka h-full"></span></div>
+        </div>
+        @if ($tandai)
+
+            <div class="flex flex-col gap-5 p-6 lg:px-8">
+                <div class="flex flex-col gap-1">
+                    <span class="font-caption text-[11px] font-semibold uppercase tracking-[0.8px] text-fg-muted">Cetak label QR</span>
+                    <h2 class="judul text-[28px] leading-8">{{ $nTerpilih }} label</h2>
+                    <span class="text-sm text-fg-muted">{{ $nTerpilih ? ceil(min($nTerpilih, self::MAKS_LABEL) / $perLembar).' lembar A4 · dari '.$nTerpilih.' unit yang dipilih di daftar' : 'Centang unit di daftar (hanya yang sudah berkode).' }}</span>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    @foreach (['sedang' => ['Sedang · 60 × 30 mm', '24 label per lembar · mudah dipindai dari 1 m'], 'kecil' => ['Kecil · 40 × 20 mm', '65 label per lembar · untuk tiang ramping']] as $v => [$judulU, $ketU])
+                        <label @class(['flex cursor-pointer flex-col gap-1 rounded-md p-4 outline -outline-offset-1', 'bg-accent-soft outline-2 outline-accent' => $ukuranLabel === $v, 'outline-1 outline-line hover:bg-surface-muted' => $ukuranLabel !== $v])>
+                            <input type="radio" wire:model.live="ukuranLabel" value="{{ $v }}" class="sr-only">
+                            <span class="text-sm font-semibold">{{ $judulU }}</span><span class="text-xs text-fg-muted">{{ $ketU }}</span>
+                        </label>
+                    @endforeach
+                </div>
+                @php $contoh = $this->daftar->whereIn('id', $terpilih)->take($perLembar); @endphp
+                <div class="rounded-md bg-surface-muted p-4">
+                    <div class="mx-auto grid max-w-[420px] gap-1.5 rounded-sm bg-white p-3 shadow-sm" style="grid-template-columns: repeat({{ $ukuranLabel === 'sedang' ? 3 : 5 }}, minmax(0, 1fr))" aria-label="Pratinjau lembar A4">
+                        @for ($i = 0; $i < min($perLembar, $ukuranLabel === 'sedang' ? 12 : 20); $i++)
+                            <span @class(['aspect-[2/1] rounded-[3px] outline outline-1 -outline-offset-1', 'bg-accent-soft outline-accent' => $i < $nTerpilih, 'outline-line' => $i >= $nTerpilih])></span>
+                        @endfor
+                    </div>
+                </div>
+                @if ($nTerpilih > self::MAKS_LABEL)
+                    <span class="flex items-center gap-2 rounded-sm bg-warning-bg px-3 py-2 text-sm text-warning">@svg('lucide-triangle-alert', 'size-4 shrink-0') Maksimal {{ self::MAKS_LABEL }} label sekali unduh. Untuk lebih banyak, saring per kecamatan lalu cetak bertahap.</span>
+                @else
+                    <span class="text-sm text-fg-muted">Maksimal {{ self::MAKS_LABEL }} label sekali unduh. Untuk lebih banyak, saring per kecamatan lalu cetak bertahap.</span>
+                @endif
+                <form method="POST" action="{{ route('terpasang.label') }}" target="_blank" class="flex flex-col gap-2">
+                    @csrf
+                    @foreach (array_slice($terpilih, 0, self::MAKS_LABEL) as $id) <input type="hidden" name="ids[]" value="{{ $id }}"> @endforeach
+                    <input type="hidden" name="ukuran" value="{{ $ukuranLabel }}">
+                    <button @disabled(! $nTerpilih || $nTerpilih > self::MAKS_LABEL) class="flex h-12 items-center justify-center gap-2 rounded-sm bg-accent text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110 disabled:opacity-40">@svg('lucide-download', 'size-[18px]') Unduh PDF label</button>
+                    <span class="text-center text-xs text-fg-muted">PDF siap cetak di kertas stiker A4, skala 100%</span>
+                </form>
+            </div>
+        @elseif ($pilih && $this->aset)
+
+            <x-aset.detail :aset="$this->aset" :bolehCatat="$this->bolehCatat" :kelola="$this->kelola" :penanda="$this->penandaTerpasang" wire:key="detail-{{ $pilih }}" />
+        @else
+
+            <div class="grid h-full place-items-center p-10 text-center text-fg-muted">
+                <div>@svg('lucide-mouse-pointer-click', 'mx-auto size-10')<p class="mt-3">Pilih unit di daftar untuk melihat kode, riwayat, dan QR-nya.</p></div>
             </div>
         @endif
-    </div>
+    </section>
+</div>
 
-    <div class="flex flex-col gap-2 sm:flex-row">
-        <label class="flex h-10 flex-1 items-center gap-2 rounded-sm bg-bg px-3 outline outline-1 -outline-offset-1 outline-line focus-within:outline-2 focus-within:outline-accent">
-            @svg('lucide-search', 'size-4 shrink-0 text-fg-muted')
-            <input wire:model.live.debounce.300ms="cari" class="w-full bg-transparent text-sm outline-none placeholder:text-fg-muted" placeholder="Cari alamat, desa, kecamatan, atau perlengkapan">
-        </label>
-        <select wire:model.live="jenisFilter" class="input h-10 py-0 text-sm sm:w-56" aria-label="Saring perlengkapan">
-            <option value="">Semua perlengkapan</option>
-            @foreach ($semuaJenis as $j) <option value="{{ $j->id }}">{{ $j->nama }}</option> @endforeach
-        </select>
-        <div class="flex shrink-0 gap-0.5 rounded-sm bg-surface-muted p-[3px] font-caption text-[13px]">
-            @foreach (['semua' => 'Semua', 'lama' => 'Sebelum SIPERJAL', 'usulan' => 'Dari usulan'] as $v => $l)
-                <button type="button" wire:click="$set('sumber', '{{ $v }}')" @class(['rounded-sm px-2.5 py-1.5', 'bg-bg font-semibold shadow-sm' => $sumber === $v, 'font-medium text-fg-muted hover:text-fg' => $sumber !== $v])>{{ $l }}</button>
-            @endforeach
-        </div>
-    </div>
-
-    <div class="flex flex-col divide-y divide-line rounded-md bg-bg outline outline-1 -outline-offset-1 outline-line">
-        @forelse ($this->daftar as $a)
-            <div class="flex items-center gap-3 p-3.5" wire:key="aset-{{ $a->id }}">
-                <x-ikon-jenis :jenis="$a->jenis" class="size-10 shrink-0" />
-                <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span class="truncate text-[15px] font-semibold">{{ $a->jenis->namaPendek() }} · {{ $a->jumlah }} {{ $a->jenis->satuan }} @if ($a->nilai() !== null)<span class="font-medium text-fg-muted">· <x-rupiah :nilai="$a->nilai()" /></span>@endif</span>
-                    <span class="truncate text-sm text-fg-muted">{{ $a->lokasi() }}</span>
-                    <span class="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-caption text-xs text-fg-muted">
-                        @if ($a->usulanItem)
-                            <span>Dari usulan <a href="{{ route('usulan', $a->usulanItem->usulan) }}" wire:navigate class="font-semibold text-accent">{{ $a->usulanItem->usulan->nomor }}</a></span>
-                        @else
-                            <span class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-semibold">Sebelum SIPERJAL</span>
-                        @endif
-                        @if ($a->waktuPasang()) <span>· {{ $a->waktuPasang() }}</span> @endif
-                        @if ($a->laporanTerbuka) <x-badge tone="perhatian">Dilaporkan rusak</x-badge> @endif
-                    </span>
-                </div>
-                @if ($this->kelola && ! $a->usulan_item_id)
-                    <div class="flex shrink-0 gap-1">
-                        <button type="button" wire:click="ubah({{ $a->id }})" class="grid size-10 place-items-center rounded-sm text-fg-muted hover:bg-surface-muted hover:text-fg" aria-label="Ubah">@svg('lucide-pencil', 'size-[18px]')</button>
-                        <button type="button" wire:click="hapus({{ $a->id }})" wire:confirm="Hapus {{ $a->jenis->namaPendek() }} di {{ $a->lokasi() }}?" class="grid size-10 place-items-center rounded-sm text-fg-muted hover:bg-danger-bg hover:text-danger" aria-label="Hapus">@svg('lucide-trash-2', 'size-[18px]')</button>
-                    </div>
-                @endif
-            </div>
-        @empty
-            <x-kosong ikon="map-pin-check" judul="Belum ada perlengkapan" :teks="$this->kelola ? 'Tambahkan satu per satu atau impor dari Excel.' : 'Belum ada yang tercatat.'" />
-        @endforelse
-    </div>
-    @if ($this->daftar->count() >= 300)
-        <span class="text-center font-caption text-xs text-fg-muted">Menampilkan 300 terbaru. Persempit dengan cari atau saringan.</span>
-    @endif
+<livewire:aset.catat />
 
     {{-- ── Dialog tambah/ubah ── --}}
     @if ($dialog === 'form')
@@ -453,7 +875,7 @@ new #[Layout('layouts.app')] class extends Component
                         <div class="flex flex-col gap-1" wire:key="item-{{ $i }}">
                             <div class="grid grid-cols-[1fr_72px_128px_40px] items-center gap-2">
                                 <select wire:model.live="items.{{ $i }}.jenis" class="input min-w-0" aria-label="Perlengkapan"><option value="">Pilih…</option>@foreach ($semuaJenis as $j)<option value="{{ $j->id }}">{{ $j->nama }}</option>@endforeach</select>
-                                <input wire:model="items.{{ $i }}.jumlah" type="number" min="1" class="input min-w-0" aria-label="Jumlah">
+                                <input wire:model="items.{{ $i }}.jumlah" type="number" min="1" @disabled($ubahId && $jenisIni?->per_unit) class="input min-w-0 disabled:bg-surface-muted disabled:text-fg-muted" aria-label="Jumlah">
                                 <input wire:model="items.{{ $i }}.harga" type="number" min="0" inputmode="numeric" class="input min-w-0" aria-label="Harga satuan (Rp)"
                                        placeholder="Opsional">
                                 @if (count($items) > 1)
@@ -463,7 +885,7 @@ new #[Layout('layouts.app')] class extends Component
                                 @endif
                             </div>
                             @if ($jenisIni)
-                                <span class="font-caption text-xs text-fg-muted">Jumlah dalam {{ $jenisIni->satuan }}{{ $jenisIni->harga_satuan ? ' · harga SSH sekarang Rp '.number_format($jenisIni->harga_satuan, 0, ',', '.').' (saran, boleh dikosongkan)' : '' }}</span>
+                                <span class="font-caption text-xs text-fg-muted">{{ $ubahId && $jenisIni->per_unit ? 'Satu unit, kodenya tetap. Untuk menambah unit, pakai Tambah.' : 'Jumlah dalam '.$jenisIni->satuan }}{{ $jenisIni->harga_satuan ? ' · harga SSH sekarang Rp '.number_format($jenisIni->harga_satuan, 0, ',', '.').' (saran, boleh dikosongkan)' : '' }}</span>
                             @endif
                             @foreach (['jenis', 'jumlah', 'harga'] as $k)
                                 @error("items.$i.$k") <span class="text-xs text-danger">{{ $message }}</span> @enderror

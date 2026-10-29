@@ -1,5 +1,5 @@
 {{-- Category Switch (pen.dev): pindah Usulan ↔ Pemeliharaan di kepala daftar. Pengganti menu navbar.
-     aktif: usulan | pemeliharaan | terpasang (Dishub & admin). Bappeda tidak punya pemeliharaan → tidak tampil. --}}
+     aktif: usulan | pemeliharaan | terpasang (= Aset: terpasang + riwayat; Dishub & admin). Bappeda tidak punya pemeliharaan → tidak tampil. --}}
 @props(['aktif' => 'usulan'])
 @use('App\Enums\Role')
 @use('App\Enums\StatusLaporan')
@@ -21,7 +21,7 @@
     ] : [];
     // data perlengkapan terpasang (termasuk yang lama, sebelum SIPERJAL): hanya Dishub & admin
     if ($user->hasRole(Role::Dishub, Role::Admin)) {
-        $pilihan['terpasang'] = ['Terpasang', 'map-pin-check', route('terpasang'), 0];
+        $pilihan['terpasang'] = ['Aset', 'package', route('terpasang'), 0];
     }
 @endphp
 @if ($tampil)

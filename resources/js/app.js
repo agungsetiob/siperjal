@@ -2,10 +2,11 @@ import exifr from 'exifr';
 import { buatPeta, alamatDari, cariAlamat, jarakMeter } from './peta/index.js';
 
 /** Pin bulat berwarna dengan ikon jenis perlengkapan (deskripsi ikon untuk adaptor peta). */
-const pinJenis = (warna, ikon, besar = false, ukuran = null, kelas = '') => {
+const pinJenis = (warna, ikon, besar = false, ukuran = null, kelas = '', jumlah = 0) => {
     const u = ukuran ?? (besar ? 40 : 34);
+    const angka = jumlah > 1 ? `<b class="pin-jumlah">${jumlah > 99 ? '99+' : jumlah}</b>` : '';
     return {
-        html: `<span class="pin-jenis${besar ? ' besar' : ''} ${kelas}" style="background:${warna};width:${u}px;height:${u}px">${ikon}</span>`,
+        html: `<span class="pin-jenis${besar ? ' besar' : ''} ${kelas}" style="background:${warna};width:${u}px;height:${u}px">${ikon}${angka}</span>`,
         ukuran: [u, u],
         jangkar: [u / 2, u / 2],
         popupAnchor: [0, -u / 2 - 4],
@@ -548,7 +549,7 @@ document.addEventListener('alpine:init', () => {
             const pin = titik.map((t, i) => {
                 const j = jenis[t.jenis] ?? { warna: '#4556A9', ikon: '' };
                 return peta.penanda({
-                    ...pinJenis(j.warna, j.ikon, i === 0, null, t.rusak ? 'rusak' : ''),
+                    ...pinJenis(j.warna, j.ikon, i === 0, null, t.rusak ? 'rusak' : '', t.jumlah),
                     lat: t.lat, lng: t.lng,
                     popup: { html: t.popup, kelas: 'popup-uj', tutup: false, lebarMaks: 260, autoPan: false },
                 });

@@ -43,7 +43,8 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
         return [
             'masuk' => Usulan::whereYear('diajukan_at', $tahun)->count(),
             'disetujui' => UsulanItem::whereYear('diputuskan_at', $tahun)->whereIn('status', [StatusItem::Disetujui, StatusItem::Terpasang])->count(),
-            'terpasang' => PerlengkapanTerpasang::count(),
+            // titik = lokasi unik per jenis (3 lampu di satu tiang dihitung satu titik)
+            'terpasang' => PerlengkapanTerpasang::select('jenis_perlengkapan_id', 'lat', 'lng')->distinct()->get()->count(),
         ];
     }
 
@@ -51,7 +52,14 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
     public function terpasang()
     {
         return PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka')
-            ->orderByRaw('terpasang_at is null')->latest('terpasang_at')->latest('id')->limit(500)->get();
+            ->orderByRaw('terpasang_at is null')->latest('terpasang_at')->latest('id')->limit(1500)->get();
+    }
+
+    /** Unit di koordinat dan jenis yang sama jadi satu titik di peta (popup memuat daftar kodenya). */
+    #[Computed]
+    public function titikPeta()
+    {
+        return $this->terpasang->groupBy(fn ($i) => $i->jenis_perlengkapan_id.'|'.round($i->lat, 6).'|'.round($i->lng, 6))->take(500)->values();
     }
 
     /** Data peta: jenis (warna + ikon) dan titik terpasang. */
@@ -62,12 +70,13 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
                 'warna' => $j->warna,
                 'ikon' => svg('lucide-'.$j->ikon, 'size-4')->toHtml(),
             ]])->all(),
-            'titik' => $this->terpasang->map(fn ($i) => [
-                'lat' => $i->lat,
-                'lng' => $i->lng,
-                'jenis' => $i->jenis_perlengkapan_id,
-                'rusak' => (bool) $i->laporanTerbuka,
-                'popup' => view('partials.popup-terpasang', ['item' => $i])->render(),
+            'titik' => $this->titikPeta->map(fn ($unit) => [
+                'lat' => $unit->first()->lat,
+                'lng' => $unit->first()->lng,
+                'jenis' => $unit->first()->jenis_perlengkapan_id,
+                'rusak' => $unit->contains(fn ($i) => (bool) $i->laporanTerbuka),
+                'jumlah' => $unit->count(),
+                'popup' => view('partials.popup-terpasang', ['unit' => $unit, 'item' => $unit->first()])->render(),
             ])->all(),
         ];
     }
@@ -153,7 +162,7 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
         </div>
 
         <div class="absolute bottom-10 right-4 z-[2] hidden w-[280px] flex-col gap-2.5 rounded-md bg-bg/95 p-4 shadow-sm sm:right-8 lg:right-[100px] lg:flex">
-            <div class="font-caption text-[11px] font-bold uppercase tracking-[0.8px]">{{ number_format($this->terpasang->count(), 0, ',', '.') }} titik sudah terpasang</div>
+            <div class="font-caption text-[11px] font-bold uppercase tracking-[0.8px]">{{ number_format($this->angka['terpasang'], 0, ',', '.') }} titik sudah terpasang</div>
             <div class="grid grid-cols-2 gap-x-2 gap-y-2.5">
                 @foreach ($legenda as $j)
                     <span class="flex items-center gap-1.5 font-caption text-xs text-fg-muted"><span class="size-2 shrink-0 rounded-full" style="background: {{ $j->warna }}"></span><span class="truncate">{{ $j->namaPendek() }}</span></span>

@@ -252,7 +252,7 @@ new class extends Component
         <div class="grid gap-3 lg:grid-cols-3">
             <div class="flex items-center gap-3 rounded-md bg-bg p-3.5 outline outline-1 -outline-offset-1 outline-line">
                 <x-ikon-jenis :jenis="$item->jenis" class="size-10 shrink-0" />
-                <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">{{ $item->jenis->namaPendek() }} · {{ $item->jumlah }} {{ $item->jenis->satuan }}</span><span class="truncate font-caption text-xs text-fg-muted">{{ $item->jenis->deskripsi }}</span></span>
+                <span class="flex min-w-0 flex-col"><span class="truncate text-sm font-semibold">{{ $item->jenis->namaPendek() }}@unless ($item->jenis->per_unit) · {{ $item->jumlah }} {{ $item->jenis->satuan }}@endunless</span><span class="truncate font-caption text-xs text-fg-muted">{{ $item->kode ? 'Kode '.$item->kode : $item->jenis->deskripsi }}</span></span>
             </div>
             @if ($asal)
                 <a href="{{ route('usulan', $asal) }}" wire:navigate class="flex items-center gap-3 rounded-md bg-bg p-3.5 outline outline-1 -outline-offset-1 outline-line hover:outline-accent/40">

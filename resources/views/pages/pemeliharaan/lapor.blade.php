@@ -55,7 +55,11 @@ new #[Layout('layouts.app')] class extends Component
     #[Computed]
     public function titik(): array
     {
-        return LaporanKerusakan::perlengkapanTerpasang()->map(fn (PerlengkapanTerpasang $i) => [
+        // unit di titik dan jenis yang sama jadi satu pin; wakilnya unit yang belum punya laporan berjalan
+        return LaporanKerusakan::perlengkapanTerpasang()->load('laporanTerbuka')
+            ->groupBy(fn ($i) => $i->jenis_perlengkapan_id.'|'.round($i->lat, 6).'|'.round($i->lng, 6))
+            ->map(fn ($g) => $g->first(fn ($i) => ! $i->laporanTerbuka) ?? $g->first())
+            ->values()->map(fn (PerlengkapanTerpasang $i) => [
             'id' => $i->id,
             'lat' => $i->lat,
             'lng' => $i->lng,
@@ -74,7 +78,9 @@ new #[Layout('layouts.app')] class extends Component
     #[Computed]
     public function sekitar()
     {
-        return $this->lat && ! $this->asetId ? LaporanKerusakan::terpasangSekitar($this->lat, $this->lng)->take(3) : collect();
+        return $this->lat && ! $this->asetId ? LaporanKerusakan::terpasangSekitar($this->lat, $this->lng)
+            ->groupBy(fn ($i) => $i->jenis_perlengkapan_id.'|'.round($i->lat, 6).'|'.round($i->lng, 6))
+            ->map(fn ($g) => $g->first(fn ($i) => ! $i->laporanTerbuka) ?? $g->first())->take(3)->values() : collect();
     }
 
     /** Tautkan ke perlengkapan terpasang: titik, wilayah & jenis ikut item. */
@@ -320,6 +326,7 @@ new #[Layout('layouts.app')] class extends Component
                         <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                             <span class="font-caption text-[11px] font-semibold uppercase tracking-[0.6px] text-accent">Perlengkapan terpasang</span>
                             <span class="text-base font-semibold">{{ $it->jenis->namaPendek() }}</span>
+                            @if ($it->kode) <span class="font-caption text-xs font-semibold tracking-wide text-accent">{{ $it->kode }}</span> @endif
                             <span class="truncate text-sm text-fg-muted">{{ $it->lokasi() }}</span>
                         </span>
                         <button type="button" wire:click="lepas" class="h-11 shrink-0 px-2 text-sm font-semibold text-accent">Bukan yang ini</button>

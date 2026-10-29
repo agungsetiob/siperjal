@@ -10,6 +10,11 @@ class Kecamatan extends Model
 
     protected $guarded = [];
 
+    public function aset()
+    {
+        return $this->hasMany(PerlengkapanTerpasang::class);
+    }
+
     public function desa()
     {
         return $this->hasMany(Desa::class)->orderBy('nama');

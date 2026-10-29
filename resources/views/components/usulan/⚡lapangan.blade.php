@@ -119,7 +119,13 @@ new class extends Component
         }
         $item = UsulanItem::find((int) substr($token, 7));
         if ($item?->status === SI::Terpasang && $item->updated_at->gt(now()->subMinutes(10))) {
-            $item->batalTerpasang();
+            try {
+                $item->batalTerpasang();
+            } catch (\DomainException $e) {
+                $this->dispatch('toast', pesan: $e->getMessage(), gagal: true);
+
+                return;
+            }
             $this->reset('itemHasil');
             unset($this->titik, $this->selesaiHariIni);
             $this->dispatch('titik-berubah', titik: $this->titik);

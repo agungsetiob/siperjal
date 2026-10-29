@@ -85,7 +85,7 @@ class DemoSeeder extends Seeder
         foreach (range(1, 8) as $n) {
             $d = Desa::inRandomOrder()->first();
             $j = $jenis->random();
-            \App\Models\PerlengkapanTerpasang::create([
+            \App\Models\PerlengkapanTerpasang::buatUnit([
                 'jenis_perlengkapan_id' => $j->id,
                 'jumlah' => mt_rand(1, 3),
                 'lat' => -3.45 + (mt_rand(-400, 400) / 10000),
@@ -96,6 +96,21 @@ class DemoSeeder extends Seeder
                 'tahun' => mt_rand(2015, 2024),
             ]);
         }
+
+        // riwayat pemeliharaan rutin pada beberapa unit (yang dari laporan dibuat LaporanDemoSeeder lewat alur aplikasi)
+        $petugas = \App\Models\User::where('email', 'petugas@usuljalan.test')->first();
+        $kegiatan = ['rutin', 'pembersihan', 'rutin', 'perbaikan'];
+        \App\Models\PerlengkapanTerpasang::whereNotNull('kode')->orderBy('id')->take(8)->get()->each(function ($a, $i) use ($petugas, $kegiatan) {
+            foreach (range(0, $i % 3) as $k) {
+                \App\Models\Pemeliharaan::create([
+                    'perlengkapan_terpasang_id' => $a->id,
+                    'tanggal' => now()->subDays(3 + $i * 5 + $k * 40),
+                    'kegiatan' => $kegiatan[($i + $k) % 4],
+                    'catatan' => ['Cek kondisi berkala, tidak ada kerusakan.', 'Dibersihkan dari debu dan lumut; reflektif masih terang.', null][($i + $k) % 3],
+                    'petugas_id' => $petugas?->id,
+                ]);
+            }
+        });
 
         $this->call(FotoDemoSeeder::class);
         $this->call(LaporanDemoSeeder::class);

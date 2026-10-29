@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\StatusItem;
 use App\Support\Kabar;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class UsulanItem extends Model
 {
@@ -42,10 +43,16 @@ class UsulanItem extends Model
         return $this->hasMany(UsulanFoto::class)->where('jenis', 'hasil');
     }
 
-    /** Baris perlengkapan terpasang (ada setelah item ditandai terpasang). */
+    /** Unit perlengkapan terpasang (ada setelah item ditandai terpasang); jenis per unit menghasilkan satu baris per unit. */
+    public function asetUnit()
+    {
+        return $this->hasMany(PerlengkapanTerpasang::class)->orderBy('id');
+    }
+
+    /** Unit pertama (tautan lama berbasis item usulan menuju sini). */
     public function aset()
     {
-        return $this->hasOne(PerlengkapanTerpasang::class);
+        return $this->hasOne(PerlengkapanTerpasang::class)->oldestOfMany();
     }
 
     public function laporanKerusakan()
@@ -109,14 +116,24 @@ class UsulanItem extends Model
             'terpasang', ['foto' => $terakhir?->url()]);
     }
 
-    /** Samakan baris perlengkapan terpasang dengan data terpasang item ini (titik terpasang, atau titik usulan). */
+    /**
+     * Samakan unit perlengkapan terpasang dengan data terpasang item ini (titik terpasang, atau titik usulan).
+     * Idempoten: data bersama diperbarui di semua unit (kode tidak berubah), unit kurang ditambah, unit lebih
+     * dihapus mulai dari yang terbaru. Unit yang sudah punya riwayat tidak dihapus.
+     *
+     * @return PerlengkapanTerpasang unit pertama
+     *
+     * @throws \DomainException bila jumlah tidak bisa dikurangi karena unit sudah punya riwayat
+     */
     public function sinkronAset(): PerlengkapanTerpasang
     {
         $u = $this->usulan;
         $tanggal = $this->terpasang_at;
-        $aset = $this->aset()->updateOrCreate([], [
+        $banyak = max(1, $this->jumlah_terpasang ?? $this->jumlah);
+        $perUnit = (bool) $this->jenis->per_unit;
+        $bersama = [
             'jenis_perlengkapan_id' => $this->jenis_perlengkapan_id,
-            'jumlah' => $this->jumlah_terpasang ?? $this->jumlah,
+            'jumlah' => $perUnit ? 1 : $banyak,
             'harga_satuan' => $this->harga_satuan,
             'lat' => $this->lat_terpasang ?? $u->lat,
             'lng' => $this->lng_terpasang ?? $u->lng,
@@ -126,21 +143,43 @@ class UsulanItem extends Model
             'terpasang_at' => $tanggal,
             'tahun' => $tanggal?->year,
             'catatan' => $this->catatan_terpasang,
-        ]);
-        LaporanKerusakan::where('usulan_item_id', $this->id)->whereNull('perlengkapan_terpasang_id')->update(['perlengkapan_terpasang_id' => $aset->id]);
+        ];
+        $target = $perUnit ? $banyak : 1;
 
-        return $aset;
+        return DB::transaction(function () use ($bersama, $target) {
+            $unit = $this->asetUnit()->get();
+            if ($unit->count() > $target) {
+                $lebih = $unit->slice($target)->reverse();
+                $terkunci = $lebih->filter->punyaRiwayat();
+                if ($terkunci->isNotEmpty()) {
+                    throw new \DomainException("{$terkunci->count()} unit sudah punya riwayat; jumlah tidak bisa dikurangi di bawah ".($target + $terkunci->count()).'.');
+                }
+                $lebih->each->delete();
+                $unit = $unit->take($target);
+            }
+            $unit->each->update($bersama);
+            while ($unit->count() < $target) {
+                $unit->push($this->asetUnit()->create($bersama));
+            }
+            $pertama = $unit->first();
+            LaporanKerusakan::where('usulan_item_id', $this->id)->whereNull('perlengkapan_terpasang_id')->update(['perlengkapan_terpasang_id' => $pertama->id]);
+
+            return $pertama;
+        });
     }
 
     /** Batalkan penandaan terpasang (tombol Urungkan). */
     public function batalTerpasang(): void
     {
+        $unit = $this->asetUnit()->get();
+        // pengaman: unit yang sudah punya laporan/pemeliharaan tidak boleh hilang bersama penandaannya
+        throw_if($unit->contains->punyaRiwayat(), \DomainException::class, 'Perlengkapan ini sudah punya riwayat, penandaan terpasang tidak bisa dibatalkan.');
         UsulanFoto::where('usulan_item_id', $this->id)->where('jenis', 'hasil')->get()->each(function ($f) {
             \Illuminate\Support\Facades\Storage::disk('public')->delete($f->path);
             $f->delete();
         });
         $this->update(['status' => StatusItem::Disetujui, 'jumlah_terpasang' => null, 'terpasang_at' => null, 'lat_terpasang' => null, 'lng_terpasang' => null, 'catatan_terpasang' => null]);
-        $this->aset()->delete();
+        $unit->each->delete();
         $this->usulan->hitungStatus();
         $this->usulan->catat("Penandaan {$this->jenis->namaPendek()} terpasang dibatalkan", null, false);
     }

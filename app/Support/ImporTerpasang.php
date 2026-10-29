@@ -131,7 +131,7 @@ class ImporTerpasang
         $batch = Str::lower(Str::random(12));
         DB::transaction(function () use ($sah, $batch) {
             foreach ($sah as $d) {
-                PerlengkapanTerpasang::create([
+                PerlengkapanTerpasang::buatUnit([
                     'jenis_perlengkapan_id' => $d['jenis_perlengkapan_id'],
                     'jumlah' => $d['jumlah'],
                     'harga_satuan' => $d['harga_satuan'] ?? null,
@@ -154,7 +154,7 @@ class ImporTerpasang
     /** Batalkan impor: hapus yang belum pernah dilaporkan. @return int jumlah terhapus */
     public static function batalkan(string $batch): int
     {
-        $n = PerlengkapanTerpasang::where('batch', $batch)->whereDoesntHave('laporanKerusakan')->delete();
+        $n = PerlengkapanTerpasang::where('batch', $batch)->whereDoesntHave('laporanKerusakan')->whereDoesntHave('pemeliharaan')->delete();
         LogPengaturan::catat("Impor perlengkapan terpasang dibatalkan ({$n} baris)");
 
         return $n;

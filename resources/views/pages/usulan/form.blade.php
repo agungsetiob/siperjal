@@ -695,7 +695,7 @@ new #[Layout('layouts.app')] class extends Component
                     <span class="text-accent">@svg('lucide-map-pin-check', 'size-[18px]')</span>
                     <div class="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span class="text-[13px] font-semibold">Sudah ada {{ $this->sudahTerpasang->count() }} perlengkapan terpasang di dekat sini</span>
-                        <span class="text-xs leading-[17px] text-fg-muted">{{ $this->sudahTerpasang->take(3)->map(fn ($a) => $a->jenis->namaPendek().' ±'.round($a->jarak).' m')->implode(', ') }}. Hanya info — usulanmu tetap bisa dikirim.</span>
+                        <span class="text-xs leading-[17px] text-fg-muted">{{ $this->sudahTerpasang->groupBy('jenis_perlengkapan_id')->take(3)->map(fn ($g) => $g->first()->jenis->namaPendek().($g->count() > 1 ? ' ×'.$g->count() : '').' ±'.round($g->min('jarak')).' m')->implode(', ') }}. Hanya info — usulanmu tetap bisa dikirim.</span>
                     </div>
                 </div>
             @endif
