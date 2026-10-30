@@ -675,7 +675,7 @@ new #[Layout('layouts.app')] class extends Component
                                                 <input value="{{ $d->nama }}" @change="$wire.ubahDesa({{ $d->id }}, $event.target.value)" @keydown.enter="$el.blur()" @keydown.escape="$el.value = @js($d->nama); $el.blur()" aria-label="Nama desa"
                                                        x-init="$el.style.width = ($el.value.length + 2) + 'ch'" @input="$el.style.width = ($el.value.length + 2) + 'ch'"
                                                        class="min-w-[4ch] rounded-full bg-transparent px-2 py-0.5 outline-none" title="Ketuk untuk mengubah nama">
-                                                <button wire:click="hapusDesa({{ $d->id }})" wire:confirm="Hapus desa {{ $d->nama }}?" class="grid size-5 place-items-center rounded-full text-fg-muted hover:bg-line" aria-label="Hapus desa {{ $d->nama }}">@svg('lucide-x', 'size-3')</button>
+                                                <button @click="$dispatch('konfirmasi', { judul: 'Hapus desa?', teks: @js('Desa '.$d->nama.' akan dihapus.'), tombol: 'Hapus', aksi: () => $wire.hapusDesa({{ $d->id }}) })" class="grid size-5 place-items-center rounded-full text-fg-muted hover:bg-line" aria-label="Hapus desa {{ $d->nama }}">@svg('lucide-x', 'size-3')</button>
                                             </span>
                                         @endforeach
                                         <form wire:submit="tambahDesa({{ $k->id }})" class="flex">
@@ -740,7 +740,7 @@ new #[Layout('layouts.app')] class extends Component
                         <input wire:model="persen" type="number" class="w-10 bg-transparent text-right font-semibold outline-none"> <span class="text-fg-muted">%</span>
                     </label>
                     @if ($tahunSsh < now()->year + 1)
-                        <button @click="confirm(`Semua harga satuan diubah ${$wire.persen}% untuk SSH {{ $tahunSsh + 1 }}. Item yang sudah disetujui tidak berubah. Lanjutkan?`) && $wire.salinSsh()" class="flex flex-1 items-center justify-center gap-2 rounded-sm px-3.5 py-2.5 text-sm font-semibold outline outline-1 -outline-offset-1 outline-fg hover:bg-bg">
+                        <button @click="$dispatch('konfirmasi', { judul: 'Salin ke SSH {{ $tahunSsh + 1 }}?', teks: `Semua harga satuan diubah ${$wire.persen}% untuk SSH {{ $tahunSsh + 1 }}. Item yang sudah disetujui tidak berubah.`, tombol: 'Lanjutkan', bahaya: false, aksi: () => $wire.salinSsh() })" class="flex flex-1 items-center justify-center gap-2 rounded-sm px-3.5 py-2.5 text-sm font-semibold outline outline-1 -outline-offset-1 outline-fg hover:bg-bg">
                             @svg('lucide-copy', 'size-4') Salin ke SSH {{ $tahunSsh + 1 }}
                         </button>
                     @else

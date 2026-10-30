@@ -93,7 +93,7 @@
 
     <div class="flex flex-col gap-2 border-t border-line pt-5">
         @if (in_array($s, [SL::Baru, SL::Ditugaskan]))
-            <button type="button" wire:click="batalkan({{ $l->id }})" wire:confirm="Batalkan laporan {{ $l->nomor }}?" class="flex h-12 items-center justify-center gap-2 rounded-sm text-base font-semibold text-danger outline outline-1 -outline-offset-1 outline-line hover:bg-danger-bg">@svg('lucide-x', 'size-[18px]') Batalkan laporan</button>
+            <button type="button" @click="$dispatch('konfirmasi', { judul: 'Batalkan laporan?', teks: @js('Laporan '.$l->nomor.' akan dibatalkan dan tidak diproses Dishub.'), tombol: 'Batalkan laporan', aksi: () => $wire.batalkan({{ $l->id }}) })" class="flex h-12 items-center justify-center gap-2 rounded-sm text-base font-semibold text-danger outline outline-1 -outline-offset-1 outline-line hover:bg-danger-bg">@svg('lucide-x', 'size-[18px]') Batalkan laporan</button>
         @elseif ($s === SL::MenungguPerbaikan)
             <p class="text-center font-caption text-[13px] text-fg-muted">Laporan tidak bisa dibatalkan setelah dikonfirmasi petugas.</p>
         @elseif (in_array($s, [SL::Selesai, SL::Ditolak]))

@@ -742,7 +742,7 @@ new class extends Component
         <div class="fixed inset-x-0 bottom-0 z-[1001] flex flex-col gap-1 border-t border-line bg-bg px-4 pb-6 pt-3 shadow-[0_-4px_12px_#0000000a] lg:sticky lg:mt-auto lg:px-6 lg:pb-4">
             @if ($st === $S::Draft)
                 <a href="{{ route('usulan.ubah', $u) }}" wire:navigate class="flex h-[52px] items-center justify-center gap-2 rounded-sm bg-accent text-base font-semibold text-fg-inverse shadow-sm">Lanjutkan mengisi @svg('lucide-arrow-right', 'size-[18px]')</a>
-                <button wire:click="hapusDraft" wire:confirm="Hapus draft ini?" class="h-11 text-base font-semibold text-danger">Hapus draft</button>
+                <button @click="$dispatch('konfirmasi', { judul: 'Hapus draft?', teks: 'Draft usulan ini akan dihapus.', tombol: 'Hapus', aksi: () => $wire.hapusDraft() })" class="h-11 text-base font-semibold text-danger">Hapus draft</button>
             @elseif ($st === $S::Revisi)
                 <a href="{{ route('usulan.ubah', $u) }}" wire:navigate class="flex h-[52px] items-center justify-center gap-2 rounded-sm bg-accent text-base font-semibold text-fg-inverse shadow-sm">Perbaiki @svg('lucide-arrow-right', 'size-[18px]')</a>
             @else
@@ -1382,7 +1382,7 @@ new class extends Component
             <section class="flex flex-wrap items-center gap-3 rounded-md bg-bg p-4 outline outline-1 -outline-offset-1 outline-line">
                 @if ($u->status === \App\Enums\StatusUsulan::Draft)
                     <span class="flex-1 text-sm">Usulan belum dikirim.</span>
-                    <x-tombol variant="teks" ikon="trash-2" wire:click="hapusDraft" wire:confirm="Hapus draft ini?">Hapus</x-tombol>
+                    <x-tombol variant="teks" ikon="trash-2" @click="$dispatch('konfirmasi', { judul: 'Hapus draft?', teks: 'Draft usulan ini akan dihapus.', tombol: 'Hapus', aksi: () => $wire.hapusDraft() })">Hapus</x-tombol>
                     <x-tombol :href="route('usulan.ubah', $u)" ikonKanan="arrow-right">Lanjutkan</x-tombol>
                 @else
                     <span class="flex-1 text-sm">Bagikan link agar keluarga/warga bisa ikut memantau.</span>

@@ -24,7 +24,7 @@
                         {{ $p->dariLaporan() ? ($rinci && $p->laporan ? 'dari laporan '.$p->laporan->nomor : 'dari laporan warga') : 'catatan petugas' }}
                     </span>
                     @if ($rinci && $p->bolehDihapus(auth()->user()))
-                        <button type="button" wire:click="hapusCatatan({{ $p->id }})" wire:confirm="Hapus catatan {{ $p->label() }} {{ $p->tanggal->translatedFormat('j M Y') }}?" class="ml-auto grid size-7 place-items-center rounded-sm text-fg-muted hover:bg-danger-bg hover:text-danger" aria-label="Hapus catatan">@svg('lucide-trash-2', 'size-3.5')</button>
+                        <button type="button" @click="$dispatch('konfirmasi', { judul: 'Hapus catatan?', teks: @js('Catatan '.$p->label().' tanggal '.$p->tanggal->translatedFormat('j M Y').' akan dihapus dari riwayat.'), tombol: 'Hapus', aksi: () => $wire.hapusCatatan({{ $p->id }}) })" class="ml-auto grid size-7 place-items-center rounded-sm text-fg-muted hover:bg-danger-bg hover:text-danger" aria-label="Hapus catatan">@svg('lucide-trash-2', 'size-3.5')</button>
                     @endif
                 </div>
                 @if ($p->catatan) <p class="text-sm leading-[21px] text-fg-muted">{{ $p->catatan }}</p> @endif

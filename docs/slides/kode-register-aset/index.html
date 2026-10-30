@@ -8,54 +8,110 @@
   :root {
     --bg: #ffffff; --fg: #000100; --muted: #565b73; --line: #dfe2ee;
     --accent: #4556a9; --accent-soft: #e9ecf7; --accent-deep: #1d2554;
-    --tanda: #e11d48; --ok: #0b7a4f; --ok-bg: #e3f4ec; --warn-bg: #fff4d6;
+    --tanda: #e11d48; --ok: #0b7a4f; --ok-bg: #e3f4ec; --warn: #8a5a00; --warn-bg: #fff4d6;
+    /* Warna per peran, dipakai konsisten di seluruh slide */
+    --admin: #7c3aed; --admin-soft: #f1eafe;
+    --koor: #4556a9; --koor-soft: #e9ecf7;
+    --warga: #b45309; --warga-soft: #fdf0dc;
+    --petugas: #0f766e; --petugas-soft: #dcf2ee;
   }
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; background: #14172b; font-family: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif; color: var(--fg); overflow: hidden; }
   /* Panggung 1280x720 yang diskalakan memenuhi layar */
   #panggung { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: center; }
-  .slide { position: absolute; inset: 0; background: var(--bg); display: none; padding: 56px 72px; overflow: hidden; }
+  .slide { position: absolute; inset: 0; background: var(--bg); display: none; padding: 44px 64px 40px; overflow: hidden; --peran: var(--accent); --peran-soft: var(--accent-soft); }
   .slide.aktif { display: flex; flex-direction: column; }
+  .r-admin { --peran: var(--admin); --peran-soft: var(--admin-soft); }
+  .r-koor { --peran: var(--koor); --peran-soft: var(--koor-soft); }
+  .r-warga { --peran: var(--warga); --peran-soft: var(--warga-soft); }
+  .r-petugas { --peran: var(--petugas); --peran-soft: var(--petugas-soft); }
   h1, h2 { font-family: 'Anton', 'Impact', 'Arial Narrow', sans-serif; font-weight: 400; letter-spacing: .5px; text-transform: uppercase; color: var(--accent-deep); }
   h1 { font-size: 76px; line-height: 1.02; }
-  h2 { font-size: 46px; line-height: 1.05; }
-  .label { font: 700 15px/1 'Inter', sans-serif; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
-  .sub { font-size: 22px; line-height: 1.45; color: var(--muted); margin-top: 14px; }
-  p, li { font-size: 22px; line-height: 1.45; }
+  h2 { font-size: 40px; line-height: 1.05; }
+  .label { display: flex; align-items: center; gap: 10px; font: 700 14px/1 'Inter', sans-serif; letter-spacing: 1.8px; text-transform: uppercase; color: var(--peran); margin-bottom: 12px; }
+  .label .peran { background: var(--peran); color: #fff; padding: 6px 10px; border-radius: 6px; letter-spacing: 1.2px; }
+  .sub { font-size: 21px; line-height: 1.45; color: var(--muted); margin-top: 12px; }
+  p, li { font-size: 20px; line-height: 1.45; }
   b { font-weight: 700; }
-  .isi { flex: 1; display: flex; gap: 40px; margin-top: 26px; min-height: 0; }
-  .kiri { width: 400px; flex: none; display: flex; flex-direction: column; gap: 16px; }
-  .kanan { flex: 1; min-width: 0; display: flex; align-items: flex-start; justify-content: center; }
-  .kanan img { max-width: 100%; max-height: 100%; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 6px 24px #1d255422; }
-  .dua { display: flex; gap: 28px; align-items: flex-start; justify-content: center; height: 100%; }
-  .dua img { height: 100%; width: auto; max-width: 48%; object-fit: contain; }
-  .kartu { background: var(--accent-soft); border-radius: 12px; padding: 16px 20px; }
-  .kartu.ok { background: var(--ok-bg); }
-  .kartu.warn { background: var(--warn-bg); }
-  .kartu small { display: block; font: 700 13px/1 'Inter', sans-serif; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-  .no { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--tanda); color: #fff; font: 700 16px/1 'Inter', sans-serif; flex: none; }
+
+  /* Pita alur: posisi langkah ini di dalam alur peran */
+  .pita { display: flex; align-items: center; gap: 6px; margin-top: 16px; flex-wrap: nowrap; }
+  .pita span { font: 600 14px/1 'Inter', sans-serif; padding: 8px 12px; border-radius: 99px; background: #f1f2f7; color: var(--muted); white-space: nowrap; }
+  .pita span.on { background: var(--peran); color: #fff; }
+  .pita span.lewat { background: var(--peran-soft); color: var(--peran); }
+  .pita i { font-style: normal; color: #b4b8c9; font-size: 14px; }
+
+  .isi { flex: 1; display: flex; gap: 36px; margin-top: 20px; min-height: 0; }
+  .kiri { width: 400px; flex: none; display: flex; flex-direction: column; gap: 12px; }
+  .kanan { flex: 1; min-width: 0; min-height: 0; display: flex; align-items: flex-start; justify-content: center; }
+  .kanan > img { max-width: 100%; max-height: 100%; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 6px 24px #1d255422; }
+  .hp { display: flex; gap: 28px; justify-content: center; align-items: flex-start; height: 100%; }
+  .hp figure { height: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 0; }
+  .hp img { height: calc(100% - 26px); width: auto; border-radius: 18px; border: 1px solid var(--line); box-shadow: 0 6px 24px #1d255422; }
+  .hp figcaption, .dua figcaption { font: 600 13px/1.2 'Inter', sans-serif; color: var(--muted); }
+  .dua { display: flex; gap: 22px; justify-content: center; align-items: flex-start; height: 100%; min-width: 0; }
+  .dua figure { display: flex; flex-direction: column; gap: 8px; align-items: center; min-width: 0; height: 100%; }
+  .dua img { max-width: 100%; max-height: calc(100% - 26px); border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 6px 24px #1d255422; }
+
+  .no { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--tanda); color: #fff; font: 700 15px/1 'Inter', sans-serif; flex: none; }
   .baris { display: flex; gap: 12px; align-items: flex-start; }
-  .baris span:last-child { font-size: 20px; line-height: 1.4; }
-  table { border-collapse: collapse; width: 100%; margin-top: 22px; }
-  th { text-align: left; font: 700 14px/1 'Inter', sans-serif; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 0 16px 10px; }
-  td { vertical-align: top; padding: 16px; border-top: 1px solid var(--line); font-size: 21px; line-height: 1.4; }
-  td:first-child { width: 44%; font-weight: 600; }
-  td .tag { display: inline-block; font: 700 13px/1 'Inter', sans-serif; letter-spacing: 1px; padding: 5px 8px; border-radius: 6px; vertical-align: 2px; margin-right: 6px; }
+  .baris > span:last-child { font-size: 18.5px; line-height: 1.38; }
+  .sublabel { font: 700 13px/1 'Inter', sans-serif; letter-spacing: 1.4px; color: var(--muted); text-transform: uppercase; }
+  .rapat .baris > span:last-child { font-size: 17px; line-height: 1.32; }
+  .rapat .no { width: 25px; height: 25px; font-size: 13.5px; }
+  .kartu { background: var(--accent-soft); border-radius: 12px; padding: 13px 16px; }
+  .kartu p { font-size: 16.5px; line-height: 1.4; }
+  .kartu.ok { background: var(--ok-bg); }
+  .kartu.warn { background: var(--warn-bg); border-left: 4px solid #e0a100; }
+  .kartu small { display: block; font: 700 12px/1 'Inter', sans-serif; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .kartu.warn small { color: var(--warn); }
+
+  table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+  th { text-align: left; font: 700 13px/1 'Inter', sans-serif; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 0 14px 10px; }
+  td { vertical-align: top; padding: 13px 14px; border-top: 1px solid var(--line); font-size: 19px; line-height: 1.38; }
+  td:first-child { width: 40%; font-weight: 600; }
+  td .tag { display: inline-block; font: 700 12px/1 'Inter', sans-serif; letter-spacing: 1px; padding: 5px 8px; border-radius: 6px; vertical-align: 2px; margin-right: 6px; }
   .tag.ok { background: var(--ok-bg); color: var(--ok); }
-  .tag.wajib { background: #fde2e8; color: var(--tanda); }
   .tag.opsi { background: var(--accent-soft); color: var(--accent); }
-  .alur { display: flex; align-items: stretch; gap: 14px; margin-top: 34px; }
-  .alur .k { flex: 1; background: var(--accent-soft); border-radius: 14px; padding: 20px 20px 22px; position: relative; }
-  .alur .k b.n { display: block; font: 400 44px/1 'Anton', 'Impact', sans-serif; color: var(--accent); margin-bottom: 10px; }
-  .alur .k span { font-size: 20px; line-height: 1.35; display: block; }
+  .tag.tunda { background: var(--warn-bg); color: var(--warn); }
+  .titik { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: 0; }
+
+  /* Alur besar (slide pembuka tiap peran) */
+  .alur { display: flex; align-items: stretch; gap: 12px; margin-top: 30px; }
+  .alur .k { flex: 1; background: var(--peran-soft); border-radius: 14px; padding: 18px 18px 20px; display: flex; flex-direction: column; }
+  .alur .k b.n { display: block; font: 400 40px/1 'Anton', 'Impact', sans-serif; color: var(--peran); margin-bottom: 10px; }
+  .alur .k span { font-size: 18.5px; line-height: 1.35; display: block; }
+  .alur .k em { font-style: normal; margin-top: auto; padding-top: 12px; font: 600 13px/1.2 'Inter', sans-serif; color: var(--muted); }
   .alur .k.akhir { background: var(--ok-bg); } .alur .k.akhir b.n { color: var(--ok); }
-  .panah { align-self: center; font-size: 28px; color: var(--muted); }
+  .panah { align-self: center; font-size: 24px; color: #9aa0b8; }
   .tengah { justify-content: center; }
-  .cover { background: linear-gradient(135deg, #1d2554 0%, #4556a9 100%); color: #fff; justify-content: center; }
-  .cover h1 { color: #fff; } .cover .sub { color: #dfe4ff; max-width: 820px; font-size: 26px; }
+
+  /* Diagram satu alur, empat peran */
+  .jalur { display: grid; grid-template-columns: 190px repeat(6, 1fr); grid-auto-rows: 112px; gap: 12px 10px; margin-top: 26px; position: relative; }
+  .jalur .nama { display: flex; align-items: center; gap: 10px; font: 700 17px/1.2 'Inter', sans-serif; color: var(--peran); background: var(--peran-soft); border-radius: 10px; padding: 0 14px; }
+  .jalur .nama small { display: block; font-weight: 500; font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .jalur .langkah { background: #fff; border: 2px solid var(--peran); border-radius: 10px; padding: 11px 12px; font-size: 16px; line-height: 1.3; position: relative; }
+  .jalur .langkah b.n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--peran); color: #fff; font: 700 12px/1 'Inter', sans-serif; margin-right: 6px; vertical-align: 1px; }
+  .jalur .langkah.hasil { background: var(--ok-bg); border-color: var(--ok); }
+  .jalur .langkah.hasil b.n { background: var(--ok); }
+  .jalur .kosong { border-top: 2px dashed #e3e5ee; align-self: center; }
+
+  .kode-besar { font: 400 84px/1 'Anton', 'Impact', sans-serif; letter-spacing: 3px; color: var(--accent-deep); text-transform: uppercase; }
+  .bagian { display: flex; gap: 12px; margin-top: 20px; }
+  .bagian .b { flex: 1; border-radius: 14px; padding: 14px 16px; background: var(--accent-soft); }
+  .bagian .b strong { display: block; font: 400 32px/1 'Anton', 'Impact', sans-serif; color: var(--accent); letter-spacing: 1px; margin-bottom: 8px; }
+  .bagian .b span { font-size: 17px; line-height: 1.35; display: block; }
+  .bagian .b em { font-style: normal; font: 700 12px/1 'Inter', sans-serif; letter-spacing: 1.4px; color: var(--muted); text-transform: uppercase; display: block; margin-bottom: 6px; }
+  .dua-kartu { display: flex; gap: 14px; }
+  .dua-kartu > * { flex: 1; }
+
+  .cover { background: linear-gradient(135deg, #1d2554 0%, #4556a9 100%); color: #fff; justify-content: center; padding: 56px 72px; }
+  .cover h1 { color: #fff; } .cover .sub { color: #dfe4ff; max-width: 860px; font-size: 25px; }
   .cover .label { color: #aab6ff; }
-  .cover .pil { margin-top: 40px; display: inline-flex; gap: 10px; font: 600 16px/1 'Inter', sans-serif; color: #dfe4ff; }
-  .cover .pil span { border: 1.5px solid #ffffff66; border-radius: 99px; padding: 8px 14px; }
+  .cover .pil { margin-top: 40px; display: inline-flex; gap: 10px; font: 600 16px/1 'Inter', sans-serif; color: #fff; }
+  .cover .pil span { border-radius: 99px; padding: 9px 14px; }
+  .penanda-contoh { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--tanda); color: #fff; font: 700 13px/1 'Inter', sans-serif; border: 2px solid #fff; vertical-align: -5px; }
+
   .nav { position: fixed; left: 0; right: 0; bottom: 0; height: 4px; background: #ffffff22; z-index: 5; }
   .nav i { display: block; height: 100%; background: #8c9cf5; width: 0; transition: width .2s; }
   .hitung { position: fixed; right: 16px; bottom: 12px; font: 600 13px 'Inter', sans-serif; color: #ffffff99; z-index: 5; }
@@ -67,331 +123,435 @@
     .nav, .hitung, .petunjuk { display: none; }
     @page { size: 1280px 720px; margin: 0; }
   }
-  .hp { display: flex; gap: 40px; justify-content: center; align-items: flex-start; height: 100%; }
-  .hp img { height: 100%; width: auto; max-width: 50%; object-fit: contain; border-radius: 22px; border: 1px solid var(--line); box-shadow: 0 6px 24px #1d255422; }
-  .kode-besar { font: 400 92px/1 'Anton', 'Impact', sans-serif; letter-spacing: 3px; color: var(--accent-deep); text-transform: uppercase; }
-  .bagian { display: flex; gap: 14px; margin-top: 26px; }
-  .bagian .b { flex: 1; border-radius: 14px; padding: 16px 18px; background: var(--accent-soft); }
-  .bagian .b strong { display: block; font: 400 34px/1 'Anton', 'Impact', sans-serif; color: var(--accent); letter-spacing: 1px; margin-bottom: 8px; }
-  .bagian .b span { font-size: 19px; line-height: 1.35; display: block; }
-  .bagian .b em { font-style: normal; font: 700 12px/1 'Inter', sans-serif; letter-spacing: 1.4px; color: var(--muted); text-transform: uppercase; display: block; margin-bottom: 6px; }
-  .dua-kartu { display: flex; gap: 16px; }
-  .dua-kartu .kartu { flex: 1; }
-  table.rapat td { padding: 11px 16px; font-size: 19px; }
-  table.rapat { margin-top: 14px; }
-  td .tag.tunda { background: var(--warn-bg); color: #8a5a00; }
 </style>
 </head>
 <body>
-<style>
-  .xl { border-collapse: collapse; width: 100%; margin-top: 22px; font: 15px/1.3 'Inter', ui-sans-serif, sans-serif; }
-  .xl th, .xl td { border: 1px solid #c9ccd6; padding: 8px 10px; font-size: 15px; line-height: 1.3; width: auto; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg); vertical-align: middle; }
-  .xl td:first-child { width: auto; font-weight: 400; }
-  .xl .kol th { background: #eef0f4; color: var(--muted); text-align: center; font-size: 13px; padding: 4px; }
-  .xl .kepala td { background: #e3f4ec; font-weight: 700; }
-  .xl .kepala td.wajib { background: #fde2e8; color: var(--tanda); }
-  .xl td.no { background: #eef0f4; color: var(--muted); text-align: center; width: 34px; font-size: 13px; }
-  .xl td.angka { text-align: right; font-variant-numeric: tabular-nums; }
-  .tabsheet { display: flex; gap: 2px; align-items: center; margin-top: -1px; font: 600 14px/1 'Inter', sans-serif; }
-  .tabsheet span { padding: 7px 14px; background: #eef0f4; color: var(--muted); border: 1px solid #c9ccd6; border-top: none; border-radius: 0 0 6px 6px; }
-  .tabsheet span.on { background: #fff; color: #0b7a4f; }
-  .tabsheet em { font-style: normal; font-weight: 500; color: var(--tanda); margin-left: 10px; }
-  .legenda { display: flex; gap: 22px; margin-top: 18px; font-size: 18px; color: var(--muted); align-items: center; }
-  .legenda i { display: inline-block; width: 16px; height: 16px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; }
-</style>
 <div id="panggung">
 
   <!-- 1 · Sampul -->
   <section class="slide cover">
     <div class="label">SIPERJAL · Pembaruan perlengkapan terpasang</div>
     <h1>Kode register,<br>riwayat &amp; QR</h1>
-    <p class="sub">Setiap perlengkapan jalan yang terpasang kini punya <b>kode sendiri</b>, riwayat pemeliharaannya tercatat rapi, dan bisa <b>dipindai lewat QR</b> di lapangan.</p>
-    <div class="pil"><span>Kode per unit</span><span>Riwayat pemeliharaan</span><span>QR &amp; label cetak</span><span>Unduh Excel</span></div>
-  </section>
-
-  <!-- 2 · Permintaan -> hasil -->
-  <section class="slide">
-    <div class="label">Sesuai permintaan Bapak</div>
-    <h2>Yang diminta, yang sudah jadi</h2>
-    <table class="rapat">
-      <tr><th>Permintaan</th><th>Hasilnya di SIPERJAL</th></tr>
-      <tr><td>Setiap barang terpasang, tiap unit punya kode</td><td><span class="tag ok">SUDAH</span>Kode otomatis, contoh <b>RMB-014-BTL-26</b></td></tr>
-      <tr><td>Lampu PJU: kode register dan kode lampu</td><td><span class="tag ok">SUDAH</span>Kode register <b>PJU-001-SPE-26</b> &nbsp;<span class="tag tunda">DITUNDA</span>kode lampu, sesuai arahan Bapak</td></tr>
-      <tr><td>Unduh daftar terpasang, koordinat bisa diklik ke Maps</td><td><span class="tag ok">SUDAH</span>Unduh <b>Excel / CSV</b>; koordinat jadi tautan Google Maps</td></tr>
-      <tr><td>Riwayat pemeliharaan: dari laporan dan input petugas</td><td><span class="tag ok">SUDAH</span>Laporan selesai <b>otomatis</b> masuk riwayat; petugas juga bisa mencatat pemeliharaan rutin</td></tr>
-      <tr><td>Riwayat per barang dan halaman riwayat per tanggal</td><td><span class="tag ok">SUDAH</span>Klik unit untuk melihat riwayatnya; tab <b>Riwayat</b> menampilkan per tanggal</td></tr>
-      <tr><td>QR per unit (bisa banyak sekaligus), dipindai menampilkan info dan riwayat</td><td><span class="tag ok">SUDAH</span>QR satu unit atau <b>cetak label massal</b>; scan membuka halaman info</td></tr>
-    </table>
-  </section>
-
-  <!-- 3 · Gambaran -->
-  <section class="slide tengah">
-    <div class="label">Gambaran singkat</div>
-    <h2>Dari kode sampai riwayat</h2>
-    <p class="sub">Semuanya berpusat pada <b>kode register</b>: satu kode, satu unit, satu riwayat.</p>
-    <div class="alur">
-      <div class="k"><b class="n">1</b><span><b>Kode otomatis</b><br>Dibuat saat perlengkapan ditandai terpasang atau data lama dimasukkan.</span></div>
-      <div class="k"><b class="n">2</b><span><b>Riwayat terkumpul</b><br>Dari laporan kerusakan yang selesai, dan dari catatan rutin petugas.</span></div>
-      <div class="k"><b class="n">3</b><span><b>QR di lapangan</b><br>Label ditempel di perlengkapan. Siapa pun bisa memindai.</span></div>
-      <div class="k akhir"><b class="n">✓</b><span><b>Mudah dikelola</b><br>Unduh ke Excel, cetak label, dan lihat riwayat per tanggal.</span></div>
+    <p class="sub">Dijelaskan per peran: <b>siapa melakukan apa, dan urutannya</b>. Di setiap gambar, tanda <span class="penanda-contoh">1</span> menunjuk bagian yang perlu diperhatikan, dengan nomor yang sama di penjelasannya.</p>
+    <div class="pil">
+      <span style="background:var(--admin)">Admin</span>
+      <span style="background:var(--koor);border:1.5px solid #ffffff55">Dishub · Koordinator</span>
+      <span style="background:var(--warga)">Masyarakat</span>
+      <span style="background:var(--petugas)">Dishub · Petugas lapangan</span>
     </div>
   </section>
 
-  <!-- 4 · Anatomi kode -->
+  <!-- 2 · Satu alur, empat peran -->
+  <section class="slide">
+    <div class="label">Gambaran besar</div>
+    <h2>Satu alur, empat peran</h2>
+    <p class="sub" style="font-size:19px">Ikuti nomornya dari kiri ke kanan. Semuanya bermuara di <b>riwayat unit</b>.</p>
+    <div class="jalur">
+      <div class="nama r-admin"><div>Admin<small>sekali di awal</small></div></div>
+      <div class="langkah r-admin"><b class="n">1</b>Isi kode singkat jenis &amp; kecamatan</div>
+      <div class="kosong"></div><div class="kosong"></div><div class="kosong"></div><div class="kosong"></div><div class="kosong"></div>
+
+      <div class="nama r-koor"><div>Dishub · Koordinator<small>di kantor</small></div></div>
+      <div class="kosong"></div>
+      <div class="langkah r-koor"><b class="n">2</b>Unit terpasang <b>otomatis berkode</b></div>
+      <div class="langkah r-koor"><b class="n">3</b>Cetak label QR, tempel di lapangan</div>
+      <div class="kosong"></div>
+      <div class="langkah r-koor"><b class="n">5</b>Tugaskan petugas</div>
+      <div class="kosong"></div>
+
+      <div class="nama r-warga"><div>Masyarakat<small>tanpa akun</small></div></div>
+      <div class="kosong"></div><div class="kosong"></div><div class="kosong"></div>
+      <div class="langkah r-warga"><b class="n">4</b>Pindai QR, lihat info, <b>lapor rusak</b></div>
+      <div class="kosong"></div><div class="kosong"></div>
+
+      <div class="nama r-petugas"><div>Dishub · Petugas lapangan<small>di lokasi, lewat HP</small></div></div>
+      <div class="kosong"></div><div class="kosong"></div><div class="kosong"></div><div class="kosong"></div>
+      <div class="langkah r-petugas"><b class="n">6</b>Cek, perbaiki, <b>Selesai</b>; catat rutin</div>
+      <div class="langkah hasil"><b class="n">✓</b><b>Riwayat unit</b> terisi otomatis</div>
+    </div>
+  </section>
+
+  <!-- 3 · Cara membaca kode -->
   <section class="slide">
     <div class="label">Kode register</div>
-    <h2>Cara membaca kodenya</h2>
-    <div class="kode-besar" style="margin-top:22px">PJU-001-SPE-26</div>
+    <h2>Satu unit, satu kode, satu riwayat</h2>
+    <div class="kode-besar" style="margin-top:20px">PJU-001-SPE-26</div>
     <div class="bagian">
-      <div class="b"><em>Bagian 1</em><strong>PJU</strong><span>Kode <b>jenis</b> perlengkapan (lampu penerangan jalan)</span></div>
+      <div class="b"><em>Bagian 1</em><strong>PJU</strong><span>Kode <b>jenis</b> (lampu penerangan jalan)</span></div>
       <div class="b"><em>Bagian 2</em><strong>001</strong><span><b>Nomor urut</b> per jenis, kecamatan, dan tahun</span></div>
       <div class="b"><em>Bagian 3</em><strong>SPE</strong><span>Kode <b>kecamatan</b> (Simpang Empat)</span></div>
       <div class="b"><em>Bagian 4</em><strong>26</strong><span><b>Tahun</b> pemasangan (2026)</span></div>
     </div>
-    <div class="dua-kartu" style="margin-top:26px">
-      <div class="kartu ok"><small>Otomatis</small><p style="font-size:19px">Tidak perlu mengetik. Kode muncul begitu perlengkapan tercatat terpasang.</p></div>
-      <div class="kartu"><small>Tidak berubah</small><p style="font-size:19px">Kode tetap sama walau alamat atau data lain diperbarui, jadi label yang tercetak aman.</p></div>
-      <div class="kartu warn"><small>Tidak dipakai ulang</small><p style="font-size:19px">Bila sebuah unit dihapus, nomornya tidak diberikan ke unit lain.</p></div>
-    </div>
-  </section>
-
-  <!-- 5 · Per unit / per ruas -->
-  <section class="slide">
-    <div class="label">Satu unit, satu kode</div>
-    <h2>Rambu dan lampu per unit, marka per ruas</h2>
-    <table>
-      <tr><th>Jenis</th><th>Cara memberi kode</th><th>Contoh</th></tr>
-      <tr><td>Rambu, lampu PJU, lampu peringatan, traffic light, kerucut</td><td><span class="tag opsi">PER UNIT</span>Tiap unit punya kode sendiri</td><td>5 rambu di satu titik = 5 kode: <b>RMB-001</b> sampai <b>RMB-005</b></td></tr>
-      <tr><td>Marka jalan, guardrail, pita getar, ZoSS</td><td><span class="tag opsi">PER RUAS</span>Satu kode untuk satu ruas atau paket</td><td>Marka 120 meter = <b>1 kode</b> (MRK-001), bukan 120 kode</td></tr>
+    <table style="margin-top:18px">
+      <tr><th>Jenis</th><th>Cara memberi kode</th></tr>
+      <tr><td>Rambu, lampu PJU, lampu peringatan, traffic light, kerucut</td><td><span class="tag opsi">PER UNIT</span>Tiap unit punya kode sendiri: 5 rambu di satu titik = <b>5 kode</b></td></tr>
+      <tr><td>Marka, guardrail, pita getar, ZoSS</td><td><span class="tag opsi">PER RUAS</span>Satu kode untuk satu ruas: marka 120 m = <b>1 kode</b></td></tr>
     </table>
-    <div class="kartu" style="margin-top:26px"><small>Bisa diatur</small><p style="font-size:20px">Admin menentukan tiap jenis di <b>Pengaturan → Perlengkapan</b>, kolom <b>Per unit / Per ruas</b>. Usulan ini perlu persetujuan Bapak (lihat slide "Mohon arahan Bapak").</p></div>
-  </section>
-<!-- 6 -->
-  <section class="slide">
-    <div class="label">Menu Aset</div>
-    <h2>Semua perlengkapan terpasang di satu tempat</h2>
-    <div class="isi">
-      <div class="kiri" style="width:400px">
-        <div class="baris"><span class="no">1</span><span>Di atas daftar ada pilihan <b>Usulan · Pemeliharaan · Aset</b>. Klik <b>Aset</b>.</span></div>
-        <div class="baris"><span class="no">2</span><span>Tiap baris menampilkan <b>kode</b>, kondisi (Baik / Dilaporkan rusak), jenis, lokasi, dan kapan terakhir dirawat.</span></div>
-        <div class="baris"><span class="no">3</span><span>Cari lewat <b>kode, jenis, atau lokasi</b>. Jalan pintas: <b>dilaporkan rusak</b> dan <b>Dekat saya</b> (urut dari yang terdekat dengan posisi petugas).</span></div>
-        <div class="kartu "><small>Sumbernya</small><p style="font-size:18px">Gabungan perlengkapan <b>dari usulan</b> SIPERJAL dan yang <b>terpasang sebelum SIPERJAL</b>.</p></div>
-      </div>
-      <div class="kanan"><img src="img/01-daftar.png" alt="Daftar aset"></div>
-    </div>
-  </section>
-<!-- 7 -->
-  <section class="slide">
-    <div class="label">Detail satu unit</div>
-    <h2>Klik unit untuk melihat semuanya</h2>
-    <div class="isi">
-      <div class="kiri" style="width:400px">
-        <div class="baris"><span class="no">1</span><span><b>Kode</b> besar dengan tombol <b>Salin</b>, kondisi, dan lokasi.</span></div>
-        <div class="baris"><span class="no">2</span><span><b>Foto saat dipasang</b> dan peta. Koordinat bisa diklik: <b>Buka di Google Maps</b>.</span></div>
-        <div class="baris"><span class="no">3</span><span>Kecamatan, tahun pasang, <b>sumber</b> (nomor usulan atau "Sebelum SIPERJAL"), harga satuan, dan kapan terakhir dirawat.</span></div>
-        <div class="baris"><span class="no">4</span><span>Tombol <b>Lihat QR</b> dan <b>Catat pemeliharaan</b>.</span></div>
-      </div>
-      <div class="kanan"><img src="img/02-detail.png" alt="Detail unit"></div>
-    </div>
-  </section>
-<!-- 8 -->
-  <section class="slide">
-    <div class="label">Riwayat pemeliharaan</div>
-    <h2>Satu garis waktu untuk tiap unit</h2>
-    <div class="isi">
-      <div class="kiri" style="width:400px">
-        <div class="baris"><span class="no">1</span><span>Catatan <b>terbaru di atas</b>, berakhir di peristiwa <b>Terpasang</b>.</span></div>
-        <div class="baris"><span class="no">2</span><span>Ada dua sumber: <b>dari laporan</b> kerusakan yang selesai diperbaiki (lengkap dengan foto hasil), dan <b>catatan petugas</b> untuk pemeliharaan rutin.</span></div>
-        <div class="kartu ok"><small>Tanpa input ganda</small><p style="font-size:18px">Laporan yang selesai <b>otomatis</b> jadi catatan riwayat. Petugas tidak perlu mengetik ulang.</p></div>
-        <div class="kartu warn"><small>Terkunci</small><p style="font-size:18px">Unit yang sudah punya riwayat tidak bisa dihapus.</p></div>
-      </div>
-      <div class="kanan"><img src="img/03-linimasa.png" alt="Linimasa riwayat"></div>
-    </div>
-  </section>
-<!-- 9 -->
-  <section class="slide">
-    <div class="label">Pemeliharaan rutin</div>
-    <h2>Petugas mencatat dalam satu layar</h2>
-    <div class="isi">
-      <div class="kiri" style="width:400px">
-        <div class="baris"><span class="no">1</span><span>Klik <b>Catat pemeliharaan</b> di detail unit (atau dari hasil memindai QR).</span></div>
-        <div class="baris"><span class="no">2</span><span>Pilih <b>Kegiatan</b>: Rutin, Pembersihan, Perbaikan, Penggantian, atau Lainnya.</span></div>
-        <div class="baris"><span class="no">3</span><span>Tanggal otomatis hari ini. <b>Catatan</b> dan <b>Foto</b> boleh dikosongkan.</span></div>
-        <div class="baris"><span class="no">4</span><span>Klik <b>Simpan catatan</b>.</span></div>
-        <div class="kartu "><small>Salah catat?</small><p style="font-size:18px">Ketuk <b>Urungkan</b> di pemberitahuan yang muncul. Catatan sendiri juga bisa dihapus selama 10 menit.</p></div>
-      </div>
-      <div class="kanan"><img src="img/04-catat.png" alt="Form catat pemeliharaan"></div>
-    </div>
-  </section>
-<!-- 10 -->
-  <section class="slide">
-    <div class="label">Halaman riwayat</div>
-    <h2>Pemeliharaan apa saja, per tanggal</h2>
-    <div class="isi">
-      <div class="kiri" style="width:400px">
-        <div class="baris"><span class="no">1</span><span>Buka tab <b>Riwayat</b>. Pilih <b>Hari ini</b>, <b>7 hari</b>, <b>Bulan ini</b>, atau <b>Pilih tanggal</b>.</span></div>
-        <div class="baris"><span class="no">2</span><span>Dikelompokkan per hari. Tiap baris: kode, kegiatan, jenis, lokasi, dan petugasnya.</span></div>
-        <div class="baris"><span class="no">3</span><span>Penanda <b>LPR-…</b> berarti berasal dari laporan; <b>Rutin</b> berarti dicatat petugas.</span></div>
-        <div class="baris"><span class="no">4</span><span>Saring per kecamatan, jenis, asal catatan, atau petugas. Klik baris untuk membuka unitnya.</span></div>
-        <div class="kartu ok"><small>Petugas lapangan</small><p style="font-size:18px">Otomatis melihat <b>catatannya sendiri</b>.</p></div>
-      </div>
-      <div class="kanan"><img src="img/05-riwayat-tanggal.png" alt="Riwayat per tanggal"></div>
+    <div class="dua-kartu" style="margin-top:16px">
+      <div class="kartu ok"><small>Otomatis</small><p>Tidak perlu diketik. Kode muncul begitu unit tercatat terpasang.</p></div>
+      <div class="kartu"><small>Tidak berubah</small><p>Kode tetap walau alamat diperbarui, jadi label yang tercetak aman.</p></div>
+      <div class="kartu warn"><small>Tidak dipakai ulang</small><p>Unit dihapus? Nomornya tidak diberikan ke unit lain.</p></div>
     </div>
   </section>
 
-  <!-- 11 · Alur laporan -> riwayat -->
-  <section class="slide">
-    <div class="label">Dari laporan ke riwayat</div>
-    <h2>Laporan selesai, riwayat otomatis terisi</h2>
-    <div class="alur" style="margin-top:22px">
-      <div class="k"><b class="n">1</b><span><b>Warga melapor</b><br>Pindai QR, foto kerusakan, kirim.</span></div>
-      <div class="k"><b class="n">2</b><span><b>Koordinator menugaskan</b><br>Memilih petugas lapangan.</span></div>
-      <div class="k"><b class="n">3</b><span><b>Petugas mengecek</b><br>Foto kondisi di lokasi, lalu setuju diperbaiki.</span></div>
-      <div class="k akhir"><b class="n">4</b><span><b>Selesai diperbaiki</b><br>Foto hasil + catatan jadi <b>riwayat unit</b>.</span></div>
+  <!-- ============ ADMIN ============ -->
+  <section class="slide r-admin tengah">
+    <div class="label"><span class="peran">Admin</span> Alur peran · sekali di awal</div>
+    <h2>Admin menyiapkan kode singkat</h2>
+    <p class="sub">Cukup sekali. Setelah itu kode semua unit terbentuk sendiri.</p>
+    <div class="alur">
+      <div class="k"><b class="n">1</b><span><b>Kode jenis</b><br>Pengaturan → Perlengkapan. Isi kode 2–4 huruf dan pilih Per unit / Per ruas.</span><em>Slide berikut</em></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">2</b><span><b>Kode kecamatan</b><br>Pengaturan → Wilayah &amp; Jalan. Isi kode di samping nama kecamatan.</span><em>Slide berikut</em></div>
+      <div class="panah">→</div>
+      <div class="k akhir"><b class="n">✓</b><span><b>Kode terbentuk otomatis</b><br>Termasuk untuk unit lama yang tadinya "Belum berkode".</span><em>Tidak ada langkah tambahan</em></div>
     </div>
-    <div class="isi" style="margin-top:20px">
-      <div class="kiri" style="width:340px">
-        <div class="kartu"><small>Kode ikut tampil</small><p style="font-size:18px">Detail laporan kini menyebut <b>kode unit</b>, jadi petugas tahu persis perlengkapan yang dimaksud.</p></div>
-        <div class="kartu warn"><small>Bila di-Urungkan</small><p style="font-size:18px">Catatan riwayat ikut dihapus, jadi tidak ada data yang menggantung.</p></div>
-      </div>
-      <div class="kanan"><img src="img/18-detail-pemeliharaan.png" alt="Detail laporan menampilkan kode unit"></div>
-    </div>
-  </section>
-<!-- 12 -->
-  <section class="slide">
-    <div class="label">QR per unit</div>
-    <h2>Satu unit, satu QR</h2>
-    <div class="isi">
-      <div class="kiri" style="width:400px">
-        <div class="baris"><span class="no">1</span><span>Di detail unit, klik <b>Lihat QR</b>.</span></div>
-        <div class="baris"><span class="no">2</span><span>Ada pratinjau <b>label</b> berisi QR, kode, jenis, dan kecamatan.</span></div>
-        <div class="baris"><span class="no">3</span><span>Unduh sebagai <b>PNG</b> atau <b>SVG</b>, <b>Salin</b> alamatnya, atau <b>Cetak label</b> langsung.</span></div>
-        <div class="kartu "><small>Isi QR</small><p style="font-size:18px">Alamat halaman info unit itu, misalnya <b>…/aset/PJU-001-SPE-26</b>. Cukup kamera HP biasa.</p></div>
-      </div>
-      <div class="kanan"><img src="img/06-qr.png" alt="Modal QR"></div>
-    </div>
-  </section>
-<!-- 13 -->
-  <section class="slide">
-    <div class="label">Cetak banyak sekaligus</div>
-    <h2>Pilih unit, unduh PDF label</h2>
-    <div class="isi">
-      <div class="kiri" style="width:400px">
-        <div class="baris"><span class="no">1</span><span>Di <b>Aset</b>, saring dulu (mis. satu kecamatan), lalu klik <b>Pilih</b>.</span></div>
-        <div class="baris"><span class="no">2</span><span>Centang unit, atau <b>Pilih semua hasil</b>.</span></div>
-        <div class="baris"><span class="no">3</span><span>Pilih ukuran: <b>Sedang 60×30 mm</b> (24 per lembar) atau <b>Kecil 40×20 mm</b> (65 per lembar).</span></div>
-        <div class="baris"><span class="no">4</span><span>Klik <b>Unduh PDF label</b>, cetak di kertas stiker A4 skala 100%.</span></div>
-        <div class="kartu warn"><small>Batas</small><p style="font-size:18px">Maksimal <b>200 label</b> sekali unduh. Untuk lebih banyak, cetak bertahap per kecamatan. Unit yang belum berkode tidak bisa dicetak.</p></div>
-      </div>
-      <div class="kanan"><img src="img/08-pilih-label.png" alt="Mode pilih dan cetak label"></div>
-    </div>
+    <div class="kartu warn" style="margin-top:22px"><small>Perhatikan</small><p>Admin hanya <b>melihat</b> Aset, Usulan, dan Pemeliharaan. Mencatat, menugaskan, dan menyelesaikan adalah tugas Dishub.</p></div>
   </section>
 
-  <!-- 14 · Hasil PDF -->
-  <section class="slide">
-    <div class="label">Hasil cetak</div>
-    <h2>Lembar label siap potong</h2>
+  <section class="slide r-admin">
+    <div class="label"><span class="peran">Admin</span> Langkah 1 dari 2</div>
+    <h2>Isi kode tiap jenis perlengkapan</h2>
+    <div class="pita"><span class="on">1 · Kode jenis</span><i>→</i><span>2 · Kode kecamatan</span><i>→</i><span>✓ Kode otomatis</span></div>
     <div class="isi">
-      <div class="kiri" style="width:420px">
-        <div class="baris"><span class="no">1</span><span>Tiap label: <b>QR</b>, <b>kode</b> tebal, jenis, dan kecamatan.</span></div>
-        <div class="baris"><span class="no">2</span><span>Garis tipis sebagai <b>panduan potong</b>.</span></div>
-        <div class="kartu warn"><small>Sebelum cetak banyak</small><p style="font-size:18px"><b>Cetak satu lembar uji</b> dan pindai dengan HP. Pastikan terbaca di bahan stiker yang dipakai.</p></div>
-        <div class="kartu"><small>Waktu proses</small><p style="font-size:18px">Satu lembar siap dalam hitungan detik. <b>200 label</b> bisa memakan waktu sekitar setengah menit.</p></div>
-      </div>
-      <div class="kanan"><img src="img/09-label-pdf.png" alt="Lembar label QR"></div>
-    </div>
-  </section>
-
-  <!-- 15 · Pindai publik -->
-  <section class="slide">
-    <div class="label">Memindai QR · tanpa akun</div>
-    <h2>Warga langsung melihat info dan riwayat</h2>
-    <div class="isi" style="gap:30px">
-      <div class="kiri" style="width:380px;gap:14px">
-        <div class="baris"><span class="no">1</span><span>Arahkan kamera HP ke QR. Halaman <b>Info Perlengkapan Jalan</b> terbuka.</span></div>
-        <div class="baris"><span class="no">2</span><span>Tampil: <b>kode</b>, kondisi, lokasi (+ Google Maps), tanggal dipasang, dan <b>riwayat pemeliharaan</b>.</span></div>
-        <div class="baris"><span class="no">3</span><span>Tombol <b>Lapor rusak</b> membawa langsung ke form laporan unit itu.</span></div>
-        <div class="kartu"><small>Label rusak?</small><p style="font-size:17px">Ketik kode yang tercetak di samping QR. Tetap bisa melapor tanpa kode.</p></div>
-        <div class="kartu ok"><small>Tidak ditampilkan ke publik</small><p style="font-size:17px">Harga, nama petugas, nomor laporan, dan foto.</p></div>
-      </div>
-      <div class="kanan"><div class="hp"><img src="img/12-hp-pindai-publik.png" alt="Halaman pindai"><img src="img/13-hp-tidak-ditemukan.png" alt="Kode tidak ditemukan"></div></div>
-    </div>
-  </section>
-
-  <!-- 16 · Petugas di lapangan -->
-  <section class="slide">
-    <div class="label">Di lapangan · petugas Dishub</div>
-    <h2>Pindai, lalu catat dalam dua ketukan</h2>
-    <div class="isi" style="gap:30px">
-      <div class="kiri" style="width:380px;gap:14px">
-        <div class="baris"><span class="no">1</span><span>Petugas yang sudah masuk melihat bilah akun, <b>nama petugas</b> di riwayat, dan tombol <b>Catat pemeliharaan</b>.</span></div>
-        <div class="baris"><span class="no">2</span><span>Daftar <b>Aset</b> di HP punya <b>Dekat saya</b>: unit terdekat tampil di atas, lengkap dengan jaraknya.</span></div>
-        <div class="kartu"><small>Hak akses</small><p style="font-size:17px">Koordinator dan petugas lapangan boleh mencatat. <b>Admin hanya melihat</b>.</p></div>
-      </div>
-      <div class="kanan"><div class="hp"><img src="img/11-hp-pindai-dishub.png" alt="Pindai sebagai Dishub"><img src="img/10-hp-daftar.png" alt="Daftar aset di HP"></div></div>
-    </div>
-  </section>
-<!-- 17 -->
-  <section class="slide">
-    <div class="label">Peta beranda</div>
-    <h2>Unit sejenis di satu titik dikelompokkan</h2>
-    <div class="isi">
-      <div class="kiri" style="width:400px">
-        <div class="baris"><span class="no">1</span><span>Pin menampilkan <b>lencana jumlah</b> bila ada beberapa unit sejenis di titik yang sama.</span></div>
-        <div class="baris"><span class="no">2</span><span>Klik pin: popup memuat <b>daftar kode</b> beserta kondisinya. Klik kode untuk info dan riwayat.</span></div>
-        <div class="baris"><span class="no">3</span><span>Tombol <b>Laporkan kerusakan di titik ini</b> otomatis memakai unit yang belum dilaporkan.</span></div>
-        <div class="kartu ok"><small>Lebih rapi</small><p style="font-size:18px">Lima rambu di satu tiang tidak lagi menjadi lima pin bertumpuk.</p></div>
-      </div>
-      <div class="kanan"><img src="img/15-beranda-popup.png" alt="Peta beranda"></div>
-    </div>
-  </section>
-
-  <!-- 18 · Unduh -->
-  <section class="slide">
-    <div class="label">Unduh daftar</div>
-    <h2>Excel atau CSV, ikut saringan yang aktif</h2>
-    <div class="isi">
-      <div class="kiri" style="width:420px">
-        <div class="baris"><span class="no">1</span><span>Klik <b>Unduh</b> di atas daftar Aset, pilih <b>Excel (.xlsx)</b> atau <b>CSV</b>.</span></div>
-        <div class="baris"><span class="no">2</span><span>Hasilnya mengikuti <b>pencarian dan saringan</b> yang sedang dipakai.</span></div>
-        <div class="baris"><span class="no">3</span><span>Di Excel, kolom koordinat berupa <b>tautan Google Maps</b> yang bisa diklik.</span></div>
-        <div class="kartu"><small>Kolom</small><p style="font-size:17px">Kode, jenis, jumlah, kecamatan, desa, alamat, koordinat, tahun pasang, sumber, harga, status, dan pemeliharaan terakhir.</p></div>
-        <div class="kartu ok"><small>Riwayat juga bisa</small><p style="font-size:17px">Tab <b>Riwayat</b> punya unduhan sendiri: Excel, CSV, atau PDF.</p></div>
-      </div>
-      <div class="kanan"><img src="img/07-unduh.png" alt="Menu unduh"></div>
-    </div>
-  </section>
-
-  <!-- 19 · Pengaturan jenis -->
-  <section class="slide">
-    <div class="label">Admin · Pengaturan · 1 dari 2</div>
-    <h2>Kode dan cara pencatatan tiap jenis</h2>
-    <div class="isi" style="gap:30px">
-      <div class="kiri" style="width:340px;gap:14px">
+      <div class="kiri" style="width:360px">
         <div class="baris"><span class="no">1</span><span>Buka <b>Pengaturan → Perlengkapan</b>.</span></div>
-        <div class="baris"><span class="no">2</span><span>Isi kolom <b>Kode</b> (2–4 huruf, unik, mis. RMB, PJU, WL).</span></div>
-        <div class="baris"><span class="no">3</span><span>Pilih <b>Per unit</b> atau <b>Per ruas</b> di bawah satuannya.</span></div>
-        <div class="kartu ok"><small>Belum diisi?</small><p style="font-size:17px">Unit tetap tercatat; kodenya <b>menyusul otomatis</b> begitu kode singkat diisi.</p></div>
+        <div class="baris"><span class="no">2</span><span>Isi kolom <b>Kode</b>: 2–4 huruf, unik (RMB, PJU, WL…). Tersimpan otomatis.</span></div>
+        <div class="baris"><span class="no">3</span><span>Pilih <b>Per unit</b> atau <b>Per ruas</b>. Ini menentukan berapa kode yang dibuat.</span></div>
+        <div class="baris"><span class="no">4</span><span>Kotak kuning menjelaskan <b>susunan kode</b> sebagai contekan.</span></div>
+        <div class="kartu warn"><small>Perhatikan</small><p>Mengubah kode hanya berlaku untuk <b>unit baru</b>. Label yang sudah tercetak tidak ikut berubah, jadi tetapkan kode resmi sebelum mulai mencetak.</p></div>
       </div>
-      <div class="kanan"><img src="img/16b-jenis.png" alt="Kode jenis di Pengaturan"></div>
+      <div class="kanan"><img src="img/admin-1-jenis.png" alt="Pengaturan, tab Perlengkapan: kolom Kode dan pilihan Per unit"></div>
     </div>
   </section>
 
-  <!-- 19b · Pengaturan kecamatan -->
-  <section class="slide">
-    <div class="label">Admin · Pengaturan · 2 dari 2</div>
-    <h2>Kode tiap kecamatan</h2>
-    <div class="isi" style="gap:30px">
-      <div class="kiri" style="width:340px;gap:14px">
+  <section class="slide r-admin">
+    <div class="label"><span class="peran">Admin</span> Langkah 2 dari 2</div>
+    <h2>Isi kode tiap kecamatan</h2>
+    <div class="pita"><span class="lewat">1 · Kode jenis</span><i>→</i><span class="on">2 · Kode kecamatan</span><i>→</i><span>✓ Kode otomatis</span></div>
+    <div class="isi">
+      <div class="kiri" style="width:380px">
         <div class="baris"><span class="no">1</span><span>Buka <b>Pengaturan → Wilayah &amp; Jalan</b>.</span></div>
-        <div class="baris"><span class="no">2</span><span>Isi kode di samping nama kecamatan (mis. <b>BTL</b> untuk Batulicin). Jumlah unit di kecamatan itu ikut tampil.</span></div>
-        <div class="kartu warn"><small>Penting</small><p style="font-size:17px">Mengubah kode hanya berlaku untuk unit <b>baru</b>. Label yang sudah tercetak tidak berubah.</p></div>
+        <div class="baris"><span class="no">2</span><span>Isi kode di samping nama kecamatan, mis. <b>BTL</b> untuk Batulicin.</span></div>
+        <div class="baris"><span class="no">3</span><span>Jumlah unit di kecamatan itu ikut tampil. "—" berarti belum ada unit.</span></div>
+        <div class="kartu ok"><small>Belum lengkap?</small><p>Unit tanpa kode jenis, kecamatan, atau tahun tetap tercatat sebagai <b>"Belum berkode"</b>. Kodenya menyusul otomatis begitu datanya lengkap.</p></div>
       </div>
-      <div class="kanan"><img src="img/17b-kecamatan.png" alt="Kode kecamatan di Pengaturan"></div>
+      <div class="kanan"><img src="img/admin-2-kecamatan.png" alt="Pengaturan, tab Wilayah dan Jalan: kode kecamatan"></div>
     </div>
   </section>
 
-  <!-- 20 · Data lama -->
+  <!-- ============ KOORDINATOR ============ -->
+  <section class="slide r-koor tengah">
+    <div class="label"><span class="peran">Dishub · Koordinator</span> Alur peran · di kantor</div>
+    <h2>Koordinator mengelola aset dan labelnya</h2>
+    <div class="alur">
+      <div class="k"><b class="n">1</b><span><b>Buka Aset</b><br>Cari, saring, temukan yang belum berkode.</span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">2</b><span><b>Lihat unit</b><br>Kode, lokasi, foto, riwayat.</span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">3</b><span><b>QR &amp; label</b><br>Satu unit, atau cetak massal ke PDF.</span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">4</b><span><b>Tugaskan</b><br>Laporan warga ke petugas lapangan.</span></div>
+      <div class="panah">→</div>
+      <div class="k akhir"><b class="n">5</b><span><b>Pantau &amp; unduh</b><br>Riwayat per tanggal, Excel/CSV.</span></div>
+    </div>
+    <div class="kartu" style="margin-top:22px"><small>Masuk dari mana?</small><p>Di atas daftar ada pilihan <b>Usulan · Pemeliharaan · Aset</b>. Semua langkah di bagian ini ada di <b>Aset</b>, kecuali langkah 4 di <b>Pemeliharaan</b>.</p></div>
+  </section>
+
+  <section class="slide r-koor">
+    <div class="label"><span class="peran">Dishub · Koordinator</span> Langkah 1 dari 5</div>
+    <h2>Buka Aset dan temukan unitnya</h2>
+    <div class="pita"><span class="on">1 · Buka Aset</span><i>→</i><span>2 · Lihat unit</span><i>→</i><span>3 · QR &amp; label</span><i>→</i><span>4 · Tugaskan</span><i>→</i><span>5 · Pantau &amp; unduh</span></div>
+    <div class="isi">
+      <div class="kiri" style="width:520px">
+        <div class="baris"><span class="no">1</span><span>Klik <b>Aset</b> di pilihan atas daftar.</span></div>
+        <div class="baris"><span class="no">2</span><span>Cari lewat <b>kode, jenis, atau lokasi</b>; <b>Filter</b> untuk kecamatan, jenis, kondisi.</span></div>
+        <div class="baris"><span class="no">3</span><span>Jalan pintas: <b>Dekat saya</b>, <b>dilaporkan rusak</b>, dan <b>belum berkode</b>.</span></div>
+        <div class="baris"><span class="no">4</span><span><b>Pilih</b> untuk cetak label massal, <b>Unduh</b> untuk Excel/CSV, <b>+</b> untuk data lama.</span></div>
+        <div class="baris"><span class="no">5</span><span>Tiap baris diawali <b>kode register</b>, lalu kondisi, jenis, lokasi, dan kapan terakhir dirawat.</span></div>
+        <div class="kartu warn"><small>Perhatikan</small><p>Ketuk <b>belum berkode</b> secara berkala. Biasanya karena kecamatan atau tahun pasang kosong; lengkapi agar unit bisa diberi label.</p></div>
+      </div>
+      <div class="kanan"><img src="img/koor-1-daftar.png" alt="Daftar Aset"></div>
+    </div>
+  </section>
+
+  <section class="slide r-koor">
+    <div class="label"><span class="peran">Dishub · Koordinator</span> Langkah 2 dari 5</div>
+    <h2>Klik unit untuk melihat semuanya</h2>
+    <div class="pita"><span class="lewat">1 · Buka Aset</span><i>→</i><span class="on">2 · Lihat unit</span><i>→</i><span>3 · QR &amp; label</span><i>→</i><span>4 · Tugaskan</span><i>→</i><span>5 · Pantau &amp; unduh</span></div>
+    <div class="isi">
+      <div class="kiri" style="width:370px">
+        <div class="baris"><span class="no">1</span><span><b>Salin</b> kode untuk ditempel di surat atau chat.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Lihat QR</b> untuk unduh atau cetak label unit ini.</span></div>
+        <div class="baris"><span class="no">3</span><span><b>Catat pemeliharaan</b> rutin langsung dari sini.</span></div>
+        <div class="baris"><span class="no">4</span><span>Koordinat bisa diklik: <b>Buka di Google Maps</b>.</span></div>
+        <div class="baris"><span class="no">5</span><span><b>Sumber</b>: nomor usulan, atau "Sebelum SIPERJAL" untuk data lama.</span></div>
+        <div class="baris"><span class="no">6</span><span>Riwayat <b>dari laporan</b> menyebut nomor laporannya; <b>catatan petugas</b> = rutin.</span></div>
+        <div class="kartu warn"><small>Perhatikan</small><p>Unit yang sudah punya riwayat atau laporan <b>tidak bisa dihapus</b>.</p></div>
+      </div>
+      <div class="kanan"><img src="img/koor-2-detail.png" alt="Detail unit"></div>
+    </div>
+  </section>
+
+  <section class="slide r-koor">
+    <div class="label"><span class="peran">Dishub · Koordinator</span> Langkah 3 dari 5 · satu unit</div>
+    <h2>Satu unit, satu QR</h2>
+    <div class="pita"><span class="lewat">1 · Buka Aset</span><i>→</i><span class="lewat">2 · Lihat unit</span><i>→</i><span class="on">3 · QR &amp; label</span><i>→</i><span>4 · Tugaskan</span><i>→</i><span>5 · Pantau &amp; unduh</span></div>
+    <div class="isi">
+      <div class="kiri" style="width:500px">
+        <div class="baris"><span class="no">1</span><span><b>Pratinjau label</b>: QR, kode, jenis, dan kecamatan.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Alamat</b> yang tersimpan di dalam QR. Bisa disalin.</span></div>
+        <div class="baris"><span class="no">3</span><span>Unduh gambar <b>PNG</b> atau <b>SVG</b> untuk dicetak di tempat lain.</span></div>
+        <div class="baris"><span class="no">4</span><span><b>Cetak label</b> langsung dari peramban.</span></div>
+        <div class="kartu warn"><small>Perhatikan sebelum mencetak</small><p>Alamat di QR mengikuti alamat server. Pada gambar ini masih alamat uji (<b>127.0.0.1</b>). Pastikan aplikasi sudah memakai <b>domain resmi</b> sebelum label dicetak, karena QR yang tercetak tidak bisa diubah.</p></div>
+      </div>
+      <div class="kanan"><img src="img/koor-3-qr.png" alt="Jendela QR aset"></div>
+    </div>
+  </section>
+
+  <section class="slide r-koor">
+    <div class="label"><span class="peran">Dishub · Koordinator</span> Langkah 3 dari 5 · banyak sekaligus</div>
+    <h2>Pilih unit, unduh PDF label</h2>
+    <div class="pita"><span class="lewat">1 · Buka Aset</span><i>→</i><span class="lewat">2 · Lihat unit</span><i>→</i><span class="on">3 · QR &amp; label</span><i>→</i><span>4 · Tugaskan</span><i>→</i><span>5 · Pantau &amp; unduh</span></div>
+    <div class="isi" style="flex-direction:column;gap:14px">
+      <div class="kanan" style="flex:1"><img src="img/koor-4-pilih-label.png" alt="Mode pilih untuk cetak label"></div>
+      <div class="dua-kartu">
+        <div class="baris"><span class="no">1</span><span>Klik <b>Pilih</b> di daftar Aset, lalu <b>centang</b> unit.</span></div>
+        <div class="baris"><span class="no">2</span><span>Atau <b>Pilih semua hasil</b> dari saringan aktif.</span></div>
+        <div class="baris"><span class="no">3</span><span>Ukuran <b>Sedang 60×30</b> (24/lembar) atau <b>Kecil 40×20</b> (65/lembar).</span></div>
+        <div class="baris"><span class="no">4</span><span><b>Unduh PDF label</b>, maks. 200 sekali unduh.</span></div>
+        <div class="baris"><span class="no">5</span><span>Unit <b>belum berkode</b> abu-abu, tidak ikut dicetak.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide r-koor">
+    <div class="label"><span class="peran">Dishub · Koordinator</span> Langkah 3 dari 5 · hasil cetak</div>
+    <h2>Lembar label siap potong</h2>
+    <div class="pita"><span class="lewat">1 · Buka Aset</span><i>→</i><span class="lewat">2 · Lihat unit</span><i>→</i><span class="on">3 · QR &amp; label</span><i>→</i><span>4 · Tugaskan</span><i>→</i><span>5 · Pantau &amp; unduh</span></div>
+    <div class="isi">
+      <div class="kiri" style="width:390px">
+        <div class="baris"><span class="no">1</span><span><b>QR</b>: dipindai dengan kamera HP biasa.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Kode register</b> tercetak tebal, untuk diketik bila QR rusak.</span></div>
+        <div class="baris"><span class="no">3</span><span>Garis tipis = <b>panduan potong</b>.</span></div>
+        <div class="kartu warn"><small>Perhatikan</small><p>Cetak di kertas stiker A4 dengan <b>skala 100%</b> (jangan "fit to page"). <b>Cetak satu lembar uji</b> dan pindai dengan HP sebelum mencetak banyak.</p></div>
+        <div class="kartu"><small>Lebih dari 200 unit?</small><p>Saring per kecamatan, lalu cetak bertahap.</p></div>
+      </div>
+      <div class="kanan"><img src="img/koor-5-label-pdf.png" alt="Lembar label QR hasil PDF"></div>
+    </div>
+  </section>
+
+  <section class="slide r-koor">
+    <div class="label"><span class="peran">Dishub · Koordinator</span> Langkah 4 dari 5 · di Pemeliharaan</div>
+    <h2>Laporan warga masuk, tugaskan petugas</h2>
+    <div class="pita"><span class="lewat">1 · Buka Aset</span><i>→</i><span class="lewat">2 · Lihat unit</span><i>→</i><span class="lewat">3 · QR &amp; label</span><i>→</i><span class="on">4 · Tugaskan</span><i>→</i><span>5 · Pantau &amp; unduh</span></div>
+    <div class="isi">
+      <div class="kiri" style="width:470px">
+        <p style="font-size:18px;color:var(--muted)">Buka <b>Pemeliharaan → tab Baru</b>, klik laporan, lalu <b>Tugaskan Petugas</b>. Detail laporan menyebut <b>kode unit</b>, jadi jelas perlengkapan mana yang dimaksud.</p>
+        <div class="baris"><span class="no">1</span><span>Pilih petugas. Label <b>Disarankan</b> = tugas aktif paling sedikit.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Catatan</b> opsional, terlihat petugas di tugasnya.</span></div>
+        <div class="baris"><span class="no">3</span><span>Klik <b>Tugaskan</b>. Petugas langsung menerima notifikasi.</span></div>
+        <div class="kartu warn"><small>Perhatikan</small><p>Hanya <b>koordinator</b> yang bisa menugaskan atau menolak laporan. Petugas lapangan tidak melihat tab Baru.</p></div>
+      </div>
+      <div class="kanan"><img src="img/koor-0-tugaskan.png" alt="Dialog Tugaskan Petugas"></div>
+    </div>
+  </section>
+
+  <section class="slide r-koor">
+    <div class="label"><span class="peran">Dishub · Koordinator</span> Langkah 5 dari 5</div>
+    <h2>Unduh daftar, pantau riwayat per tanggal</h2>
+    <div class="pita"><span class="lewat">1 · Buka Aset</span><i>→</i><span class="lewat">2 · Lihat unit</span><i>→</i><span class="lewat">3 · QR &amp; label</span><i>→</i><span class="lewat">4 · Tugaskan</span><i>→</i><span class="on">5 · Pantau &amp; unduh</span></div>
+    <div class="isi" style="gap:28px">
+      <div class="kiri rapat" style="width:370px;gap:8px">
+        <p class="sublabel">KIRI · UNDUH</p>
+        <div class="baris"><span class="no">1</span><span>Klik <b>Unduh</b> di atas daftar.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Excel</b>: koordinat jadi tautan Google Maps.</span></div>
+        <div class="baris"><span class="no">3</span><span>Isinya <b>mengikuti saringan</b> yang aktif.</span></div>
+        <p class="sublabel" style="margin-top:6px">KANAN · TAB RIWAYAT</p>
+        <div class="baris"><span class="no">1</span><span>Buka tab <b>Riwayat</b>.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Filter</b>: kecamatan, jenis, asal, petugas.</span></div>
+        <div class="baris"><span class="no">3</span><span>Rentang: hari ini, 7 hari, bulan ini, <b>pilih tanggal</b>.</span></div>
+        <div class="baris"><span class="no">4</span><span>Dikelompokkan <b>per hari</b>.</span></div>
+        <div class="baris"><span class="no">5</span><span><b>LPR-…</b> = berasal dari laporan warga.</span></div>
+        <div class="baris"><span class="no">6</span><span><b>Rutin</b> = dicatat petugas.</span></div>
+      </div>
+      <div class="kanan"><div class="dua"><figure><img src="img/koor-6-unduh.png" alt="Menu Unduh"><figcaption>Menu Unduh</figcaption></figure><figure><img src="img/koor-7-riwayat.png" alt="Tab Riwayat per tanggal"><figcaption>Tab Riwayat</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <!-- ============ MASYARAKAT ============ -->
+  <section class="slide r-warga tengah">
+    <div class="label"><span class="peran">Masyarakat</span> Alur peran · tanpa akun, lewat HP</div>
+    <h2>Warga memindai, lalu melapor</h2>
+    <div class="alur">
+      <div class="k"><b class="n">1</b><span><b>Pindai QR</b><br>Kamera HP biasa, tanpa aplikasi tambahan.</span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">2</b><span><b>Lihat info &amp; riwayat</b><br>Kondisi, lokasi, kapan dipasang dan dirawat.</span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">3</b><span><b>Lapor rusak</b><br>Unitnya sudah terisi; cukup foto dan pilih jenis kerusakan.</span></div>
+      <div class="panah">→</div>
+      <div class="k akhir"><b class="n">✓</b><span><b>Masuk ke Dishub</b><br>Koordinator menugaskan petugas.</span></div>
+    </div>
+    <div class="dua-kartu" style="margin-top:22px">
+      <div class="kartu"><small>Tanpa QR?</small><p>Bisa juga dari <b>peta beranda</b>: klik pin perlengkapan terpasang.</p></div>
+      <div class="kartu ok"><small>Tidak ditampilkan ke publik</small><p>Harga, nama petugas, nomor laporan, dan foto.</p></div>
+    </div>
+  </section>
+
+  <section class="slide r-warga">
+    <div class="label"><span class="peran">Masyarakat</span> Langkah 1–2 dari 3</div>
+    <h2>Pindai QR: info dan riwayat langsung terbuka</h2>
+    <div class="pita"><span class="on">1 · Pindai QR</span><i>→</i><span class="on">2 · Lihat info &amp; riwayat</span><i>→</i><span>3 · Lapor rusak</span></div>
+    <div class="isi">
+      <div class="kiri" style="width:560px">
+        <div class="baris"><span class="no">1</span><span><b>Kode register</b> unit, sama dengan yang tercetak di label.</span></div>
+        <div class="baris"><span class="no">2</span><span><b>Kondisi</b>: hijau bila tidak ada laporan berjalan.</span></div>
+        <div class="baris"><span class="no">3</span><span>Lokasi + <b>Buka di Google Maps</b>.</span></div>
+        <div class="baris"><span class="no">4</span><span><b>Riwayat pemeliharaan</b>: tanggal dan kegiatan, terbaru di atas.</span></div>
+        <div class="baris"><span class="no">5</span><span><b>Lapor rusak</b> membawa ke form laporan unit ini.</span></div>
+        <div class="kartu warn"><small>Perhatikan</small><p>Halaman ini <b>sama</b> untuk petugas Dishub, hanya ditambah bilah akun, nama petugas di riwayat, dan tombol Catat (lihat bagian Petugas lapangan).</p></div>
+      </div>
+      <div class="kanan"><div class="hp"><figure><img src="img/publik-1-pindai.png" alt="Halaman pindai QR untuk publik"><figcaption>/aset/RMB-001-BTL-26</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <section class="slide r-warga">
+    <div class="label"><span class="peran">Masyarakat</span> Langkah 3 dari 3</div>
+    <h2>Lapor rusak, atau ketik kodenya</h2>
+    <div class="pita"><span class="lewat">1 · Pindai QR</span><i>→</i><span class="lewat">2 · Lihat info &amp; riwayat</span><i>→</i><span class="on">3 · Lapor rusak</span></div>
+    <div class="isi" style="gap:26px">
+      <div class="kiri rapat" style="width:400px;gap:8px">
+        <p class="sublabel">KIRI · FORM LAPOR</p>
+        <div class="baris"><span class="no">1</span><span>Unit sudah <b>tertaut otomatis</b>: kode, jenis, lokasi.</span></div>
+        <div class="baris"><span class="no">2</span><span>Pilih <b>apa yang terjadi</b>.</span></div>
+        <div class="baris"><span class="no">3</span><span><b>Foto</b> wajib; nama &amp; email opsional.</span></div>
+        <p class="sublabel" style="margin-top:6px">KANAN · QR RUSAK / KODE SALAH</p>
+        <div class="baris"><span class="no">1</span><span>Ketik kode yang tercetak di samping QR.</span></div>
+        <div class="baris"><span class="no">2</span><span>Petunjuk: huruf <b>O</b> dan angka <b>0</b> sering tertukar.</span></div>
+        <div class="baris"><span class="no">3</span><span>Tetap bisa <b>melapor tanpa kode</b>.</span></div>
+      </div>
+      <div class="kanan"><div class="hp"><figure><img src="img/publik-3-lapor.png" alt="Form lapor kerusakan"><figcaption>Form lapor</figcaption></figure><figure><img src="img/publik-2-tidak-ditemukan.png" alt="Kode tidak ditemukan"><figcaption>Kode tidak ditemukan</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <section class="slide r-warga">
+    <div class="label"><span class="peran">Masyarakat</span> Jalan lain · peta beranda</div>
+    <h2>Tanpa QR: klik pin di peta</h2>
+    <div class="pita"><span class="on">Peta beranda</span><i>→</i><span class="lewat">2 · Lihat info &amp; riwayat</span><i>→</i><span class="lewat">3 · Lapor rusak</span></div>
+    <div class="isi">
+      <div class="kiri" style="width:400px">
+        <div class="baris"><span class="no">1</span><span>Unit sejenis di titik yang sama jadi <b>satu pin</b> berlencana jumlah.</span></div>
+        <div class="baris"><span class="no">2</span><span>Popup memuat <b>daftar kode</b> dan kondisinya. Klik kode untuk info &amp; riwayat.</span></div>
+        <div class="baris"><span class="no">3</span><span><b>Laporkan kerusakan di titik ini</b> otomatis memakai unit yang belum dilaporkan.</span></div>
+        <div class="kartu ok"><small>Lebih rapi</small><p>Lima rambu di satu tiang tidak lagi menjadi lima pin bertumpuk.</p></div>
+        <div class="kartu warn"><small>Perhatikan</small><p>Satu unit hanya punya <b>satu laporan berjalan</b>. Pin dengan laporan terbuka bercincin kuning.</p></div>
+      </div>
+      <div class="kanan"><img src="img/publik-4-peta.png" alt="Popup pin di peta beranda"></div>
+    </div>
+  </section>
+
+  <!-- ============ PETUGAS LAPANGAN ============ -->
+  <section class="slide r-petugas tengah">
+    <div class="label"><span class="peran">Dishub · Petugas lapangan</span> Alur peran · di lokasi, lewat HP</div>
+    <h2>Petugas bekerja dari lokasi</h2>
+    <p class="sub">Ada dua jalur kerja. Keduanya berakhir di <b>riwayat unit</b>.</p>
+    <div class="alur" style="margin-top:20px">
+      <div class="k" style="flex:.75;background:#fff;border:2px dashed var(--peran)"><span><b style="color:var(--peran)">A · Perawatan rutin</b></span></div>
+      <div class="k"><b class="n">A1</b><span><b>Dekat saya</b><br>Unit terdekat di atas.</span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">A2</b><span><b>Pindai QR / buka unit</b></span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">A3</b><span><b>Catat pemeliharaan</b></span></div>
+      <div class="panah">→</div>
+      <div class="k akhir"><b class="n">✓</b><span><b>Riwayat</b> bertambah</span></div>
+    </div>
+    <div class="alur" style="margin-top:12px">
+      <div class="k" style="flex:.75;background:#fff;border:2px dashed var(--peran)"><span><b style="color:var(--peran)">B · Laporan warga</b></span></div>
+      <div class="k"><b class="n">B1</b><span><b>Tugas masuk</b><br>Notifikasi dari koordinator.</span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">B2</b><span><b>Cek Kondisi</b><br>Foto di lokasi.</span></div>
+      <div class="panah">→</div>
+      <div class="k"><b class="n">B3</b><span><b>Selesai diperbaiki</b><br>Foto hasil.</span></div>
+      <div class="panah">→</div>
+      <div class="k akhir"><b class="n">✓</b><span><b>Riwayat</b> terisi otomatis</span></div>
+    </div>
+  </section>
+
+  <section class="slide r-petugas">
+    <div class="label"><span class="peran">Dishub · Petugas lapangan</span> Jalur A · langkah 1–2</div>
+    <h2>Temukan unit terdekat, lalu buka</h2>
+    <div class="pita"><span class="on">A1 · Dekat saya</span><i>→</i><span class="on">A2 · Pindai / buka unit</span><i>→</i><span>A3 · Catat pemeliharaan</span></div>
+    <div class="isi" style="gap:26px">
+      <div class="kiri rapat" style="width:400px;gap:8px">
+        <p class="sublabel">KIRI · DAFTAR ASET DI HP</p>
+        <div class="baris"><span class="no">1</span><span>Buka <b>Aset</b>.</span></div>
+        <div class="baris"><span class="no">2</span><span>Ketuk <b>Dekat saya</b>, izinkan lokasi.</span></div>
+        <div class="baris"><span class="no">3</span><span><b>Jarak</b> tampil di tiap unit.</span></div>
+        <div class="baris"><span class="no">4</span><span>Yang <b>terdekat</b> paling atas.</span></div>
+        <p class="sublabel" style="margin-top:6px">KANAN · HASIL PINDAI QR</p>
+        <div class="baris"><span class="no">1</span><span><b>Bilah akun</b> tanda sedang masuk sebagai petugas.</span></div>
+        <div class="baris"><span class="no">2</span><span>Pastikan <b>kode</b> sama dengan label fisiknya.</span></div>
+        <div class="baris"><span class="no">3</span><span><b>Riwayat</b> unit ini.</span></div>
+        <div class="baris"><span class="no">4</span><span><b>Catat pemeliharaan</b> (jalur A3).</span></div>
+        <div class="kartu"><small>Privasi</small><p>Posisi GPS hanya dipakai mengurutkan, <b>tidak disimpan</b>.</p></div>
+      </div>
+      <div class="kanan"><div class="hp"><figure><img src="img/petugas-1-dekat.png" alt="Daftar aset, Dekat saya"><figcaption>Aset · Dekat saya</figcaption></figure><figure><img src="img/petugas-2-pindai.png" alt="Hasil pindai QR saat masuk sebagai petugas"><figcaption>Hasil pindai QR</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <section class="slide r-petugas">
+    <div class="label"><span class="peran">Dishub · Petugas lapangan</span> Jalur A · langkah 3</div>
+    <h2>Catat pemeliharaan dalam satu layar</h2>
+    <div class="pita"><span class="lewat">A1 · Dekat saya</span><i>→</i><span class="lewat">A2 · Pindai / buka unit</span><i>→</i><span class="on">A3 · Catat pemeliharaan</span></div>
+    <div class="isi" style="gap:26px">
+      <div class="kiri rapat" style="width:400px;gap:8px">
+        <p class="sublabel">KIRI · FORM CATAT</p>
+        <div class="baris"><span class="no">1</span><span>Pilih <b>kegiatan</b>: Rutin, Pembersihan, Perbaikan, Penggantian, Lainnya.</span></div>
+        <div class="baris"><span class="no">2</span><span>Tanggal otomatis <b>hari ini</b>; ketuk Ubah bila perlu.</span></div>
+        <div class="baris"><span class="no">3</span><span><b>Catatan</b> dan foto boleh kosong.</span></div>
+        <div class="baris"><span class="no">4</span><span><b>Simpan catatan</b>.</span></div>
+        <p class="sublabel" style="margin-top:6px">KANAN · SETELAH DISIMPAN</p>
+        <div class="baris"><span class="no">1</span><span>Catatan muncul <b>paling atas</b> di riwayat.</span></div>
+        <div class="kartu warn"><small>Salah catat?</small><p>Ketuk <b>Urungkan</b> di pemberitahuan yang muncul sesaat setelah menyimpan. Catatan sendiri juga bisa dihapus selama 10 menit.</p></div>
+      </div>
+      <div class="kanan"><div class="hp"><figure><img src="img/petugas-3-catat.png" alt="Form catat pemeliharaan"><figcaption>Form catat</figcaption></figure><figure><img src="img/petugas-4-tersimpan.png" alt="Riwayat setelah catatan disimpan"><figcaption>Setelah disimpan</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <section class="slide r-petugas">
+    <div class="label"><span class="peran">Dishub · Petugas lapangan</span> Jalur B · laporan warga</div>
+    <h2>Cek kondisi, lalu tandai selesai</h2>
+    <div class="pita"><span class="lewat">B1 · Tugas masuk</span><i>→</i><span class="on">B2 · Cek Kondisi</span><i>→</i><span class="on">B3 · Selesai diperbaiki</span><i>→</i><span>✓ Riwayat otomatis</span></div>
+    <div class="isi" style="gap:26px">
+      <div class="kiri rapat" style="width:400px;gap:8px">
+        <p class="sublabel">KIRI · DETAIL TUGAS</p>
+        <div class="baris"><span class="no">1</span><span><b>Kode unit</b> yang dilaporkan; cocokkan dengan label di lokasi.</span></div>
+        <div class="baris"><span class="no">2</span><span>Siapa yang menugaskan + catatannya.</span></div>
+        <div class="baris"><span class="no">3</span><span><b>Cek Kondisi</b>: foto keadaan sekarang, putuskan diperbaiki atau tidak.</span></div>
+        <p class="sublabel" style="margin-top:6px">KANAN · SELESAI DIPERBAIKI</p>
+        <div class="baris"><span class="no">1</span><span><b>Foto hasil</b> perbaikan: wajib.</span></div>
+        <div class="baris"><span class="no">2</span><span>Catatan: opsional.</span></div>
+        <div class="baris"><span class="no">3</span><span>Ketuk <b>Selesai</b>.</span></div>
+        <div class="kartu ok"><small>Tanpa ketik ulang</small><p>Laporan yang selesai <b>otomatis</b> menjadi catatan di riwayat unit, lengkap dengan foto hasil.</p></div>
+      </div>
+      <div class="kanan"><div class="hp"><figure><img src="img/petugas-5-laporan.png" alt="Detail laporan yang ditugaskan"><figcaption>Detail tugas</figcaption></figure><figure><img src="img/petugas-6-selesai.png" alt="Form selesai diperbaiki"><figcaption>Selesai diperbaiki</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <!-- ============ PENUTUP ============ -->
+  <section class="slide">
+    <div class="label">Hak akses</div>
+    <h2>Siapa bisa apa</h2>
+    <table>
+      <tr><th>Peran</th><th>Yang bisa dilakukan</th></tr>
+      <tr><td><span class="titik" style="background:var(--warga)"></span>Masyarakat (tanpa akun)</td><td>Memindai QR, melihat info dan riwayat, <b>melaporkan kerusakan</b></td></tr>
+      <tr><td><span class="titik" style="background:var(--koor)"></span>Dishub · Koordinator</td><td>Semua fitur Aset: melihat, <b>mencatat pemeliharaan</b>, mengunduh, cetak label, mengelola data lama; <b>menugaskan/menolak</b> laporan</td></tr>
+      <tr><td><span class="titik" style="background:var(--petugas)"></span>Dishub · Petugas lapangan</td><td>Melihat Aset, <b>mencatat pemeliharaan</b>, melihat catatannya sendiri, mengerjakan laporan yang <b>ditugaskan kepadanya</b></td></tr>
+      <tr><td><span class="titik" style="background:var(--admin)"></span>Admin</td><td>Mengatur kode singkat dan jenis; di Aset hanya <b>melihat</b>, mengunduh, dan mencetak label</td></tr>
+    </table>
+    <div class="kartu warn" style="margin-top:18px"><small>Perhatikan</small><p>Tombol yang tidak berhak <b>tidak ditampilkan</b>, dan server juga menolaknya. Jadi bila seseorang tidak melihat sebuah tombol, cek dulu perannya di Pengaturan → Pengguna.</p></div>
+  </section>
+
   <section class="slide">
     <div class="label">Data yang sudah ada</div>
     <h2>Apa yang terjadi pada data lama</h2>
@@ -403,59 +563,33 @@
       <tr><td>Laporan kerusakan yang sudah selesai</td><td><b>Otomatis</b> menjadi catatan di riwayat unitnya.</td></tr>
       <tr><td>Tautan dan QR lama (/lapor/…)</td><td><b>Tetap berfungsi</b>.</td></tr>
     </table>
-    <div class="kartu warn" style="margin-top:22px"><small>Saat dipasang di server</small><p style="font-size:19px">Kami membuat <b>cadangan database</b> dulu, karena pemecahan unit tidak bisa dibatalkan sepenuhnya.</p></div>
+    <div class="kartu warn" style="margin-top:18px"><small>Saat dipasang di server</small><p>Kami membuat <b>cadangan database</b> dulu, karena pemecahan unit tidak bisa dibatalkan sepenuhnya.</p></div>
   </section>
 
-  <!-- 21 · Siapa bisa apa -->
-  <section class="slide">
-    <div class="label">Hak akses</div>
-    <h2>Siapa bisa apa</h2>
-    <table>
-      <tr><th>Peran</th><th>Yang bisa dilakukan</th></tr>
-      <tr><td>Masyarakat (tanpa akun)</td><td>Memindai QR, melihat info dan riwayat, <b>melaporkan kerusakan</b></td></tr>
-      <tr><td>Dishub · Koordinator</td><td>Semua fitur Aset: melihat, <b>mencatat pemeliharaan</b>, mengunduh, cetak label, mengelola data lama</td></tr>
-      <tr><td>Dishub · Petugas lapangan</td><td>Melihat Aset, <b>mencatat pemeliharaan</b>, riwayat miliknya, mengerjakan laporan yang ditugaskan</td></tr>
-      <tr><td>Admin</td><td>Mengatur kode singkat dan jenis; di Aset hanya <b>melihat</b>, mengunduh, dan mencetak label</td></tr>
-    </table>
-  </section>
-
-  <!-- 22 · Pengujian -->
-  <section class="slide tengah">
-    <div class="label">Kesiapan</div>
-    <h2>Sudah diuji dari ujung ke ujung</h2>
-    <div class="alur" style="margin-top:34px">
-      <div class="k akhir"><b class="n">111</b><span><b>Tes otomatis lulus</b><br>Kode, riwayat, QR, unduhan, hak akses, dan perpindahan data lama.</span></div>
-      <div class="k"><b class="n">E2E</b><span><b>Dicoba di browser nyata</b><br>Alur penuh tiap peran: lapor, tugaskan, cek, selesai, catat, cetak, unduh, pindai.</span></div>
-      <div class="k"><b class="n">200</b><span><b>Label sekali cetak</b><br>Diuji sampai batas 200 label tanpa gagal.</span></div>
-    </div>
-    <div class="kartu warn" style="margin-top:26px"><small>Satu hal yang perlu dicek bersama</small><p style="font-size:20px">Kemampuan kamera HP <b>memindai label hasil cetak</b> bergantung pada bahan stiker dan printer. Kami sarankan <b>cetak uji satu lembar</b> sebelum mencetak banyak.</p></div>
-  </section>
-
-  <!-- 23 · Perlu masukan -->
   <section class="slide">
     <div class="label">Mohon arahan Bapak</div>
     <h2>Lima hal yang perlu dikonfirmasi</h2>
     <table>
       <tr><th>Pertanyaan</th><th>Yang kami pakai sementara</th></tr>
-      <tr><td>1. Kode singkat resmi untuk tiap jenis perlengkapan dan tiap kecamatan</td><td>Contoh: RMB, PJU, WL, MRK, GRL; BTL, SPE, KRB. Mudah diganti admin.</td></tr>
-      <tr><td>2. Marka, guardrail, pita getar, ZoSS: setuju <b>satu kode per ruas</b>, bukan per meter?</td><td>Satu kode per ruas atau paket</td></tr>
+      <tr><td>1. Kode singkat resmi tiap jenis perlengkapan dan kecamatan</td><td>Contoh: RMB, PJU, WL, MRK, GRL; BTL, SPE, KRB. Mudah diganti admin.</td></tr>
+      <tr><td>2. Marka, guardrail, pita getar, ZoSS: <b>satu kode per ruas</b>, bukan per meter?</td><td>Satu kode per ruas atau paket</td></tr>
       <tr><td>3. Halaman scan publik: boleh menampilkan <b>foto dan catatan perbaikan</b>?</td><td>Hanya tanggal, kegiatan, dan catatan singkat. Tanpa foto</td></tr>
       <tr><td>4. Unit lama tanpa tahun atau kecamatan yang jelas</td><td>Dibiarkan "belum berkode" sampai Dishub melengkapi</td></tr>
       <tr><td>5. Ukuran fisik label QR yang akan dicetak</td><td>Sedang 60×30 mm dan kecil 40×20 mm</td></tr>
     </table>
-    <p class="sub" style="font-size:19px">Kode lampu PJU (kode kedua) ditunda sesuai arahan Bapak; strukturnya sudah disiapkan bila nanti diperlukan.</p>
+    <p class="sub" style="font-size:18px">Kode lampu PJU (kode kedua) ditunda sesuai arahan Bapak; strukturnya sudah disiapkan bila nanti diperlukan.</p>
   </section>
 
-  <!-- 24 · Penutup -->
   <section class="slide tengah">
     <div class="label">Ringkasnya</div>
-    <h2>Yang perlu diingat</h2>
-    <div class="alur" style="margin-top:40px">
-      <div class="k"><b class="n">1</b><span>Setiap unit punya <b>kode register</b> otomatis, mis. <b>RMB-014-BTL-26</b>.</span></div>
-      <div class="k"><b class="n">2</b><span>Riwayat terisi dari <b>laporan selesai</b> dan <b>catatan rutin</b> petugas.</span></div>
-      <div class="k"><b class="n">3</b><span><b>QR</b> di label membuka info dan riwayat; bisa dicetak <b>massal</b>.</span></div>
-      <div class="k akhir"><b class="n">✓</b><span>Daftar bisa <b>diunduh</b>, koordinat klik ke <b>Google Maps</b>.</span></div>
+    <h2>Yang perlu diingat tiap peran</h2>
+    <div class="alur" style="margin-top:34px">
+      <div class="k r-admin"><b class="n">Admin</b><span>Isi <b>kode jenis &amp; kecamatan</b> sekali, sebelum label dicetak.</span></div>
+      <div class="k r-koor"><b class="n">Koordinator</b><span>Lengkapi yang <b>belum berkode</b>, <b>cetak uji</b> label, tugaskan laporan.</span></div>
+      <div class="k r-warga"><b class="n">Masyarakat</b><span><b>Pindai QR</b> untuk info &amp; riwayat; lapor rusak tanpa akun.</span></div>
+      <div class="k r-petugas"><b class="n">Petugas</b><span><b>Cocokkan kode</b> dengan label, foto hasil, catat perawatan rutin.</span></div>
     </div>
+    <div class="kartu ok" style="margin-top:22px"><small>Hasilnya</small><p>Setiap unit punya <b>kode</b>, <b>riwayat lengkap</b>, dan <b>QR</b> yang bisa dipindai siapa saja.</p></div>
   </section>
 
 </div>

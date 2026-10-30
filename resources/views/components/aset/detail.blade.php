@@ -45,8 +45,10 @@
                 @if ($kelola && $lama)
                     <button type="button" wire:click="ubah({{ $aset->id }})" class="grid size-[38px] shrink-0 place-items-center rounded-sm text-fg-muted outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted hover:text-fg" aria-label="Ubah" title="Ubah data lama">@svg('lucide-pencil', 'size-4')</button>
                     @unless ($aset->punyaRiwayat())
-                        <button type="button" wire:click="hapus({{ $aset->id }})" wire:confirm="Hapus {{ $aset->jenis->namaPendek() }} di {{ $aset->lokasi() }}?" class="grid size-[38px] shrink-0 place-items-center rounded-sm text-fg-muted outline outline-1 -outline-offset-1 outline-line hover:bg-danger-bg hover:text-danger" aria-label="Hapus" title="Hapus">@svg('lucide-trash-2', 'size-4')</button>
+                        <button type="button" @click="$dispatch('konfirmasi', { judul: 'Hapus perlengkapan?', teks: @js($aset->jenis->namaPendek().' di '.$aset->lokasi().' akan dihapus dari daftar aset.'), tombol: 'Hapus', aksi: () => $wire.hapus({{ $aset->id }}) })" class="grid size-[38px] shrink-0 place-items-center rounded-sm text-fg-muted outline outline-1 -outline-offset-1 outline-line hover:bg-danger-bg hover:text-danger" aria-label="Hapus" title="Hapus">@svg('lucide-trash-2', 'size-4')</button>
                     @endunless
+                @elseif ($kelola && $asal)
+                    <button type="button" @click="$dispatch('toast', { judul: 'Data dari usulan {{ $asal->nomor }}', pesan: 'Jenis, lokasi & harga mengikuti usulan yang disetujui, jadi tidak diubah atau dihapus di sini.' })" class="grid size-[38px] shrink-0 place-items-center rounded-sm text-fg-muted outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted hover:text-fg" aria-label="Kenapa tidak bisa diubah?" title="Data dari usulan, tidak diubah di sini">@svg('lucide-lock', 'size-4')</button>
                 @endif
             </div>
         </div>

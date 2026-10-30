@@ -94,6 +94,7 @@
 
     <x-toast />
     <x-lihat-foto />
+    <x-konfirmasi />
     @livewireScripts
 </body>
 </html>

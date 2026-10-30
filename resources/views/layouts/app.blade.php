@@ -113,6 +113,7 @@
         <div x-data x-init="$nextTick(() => $dispatch('toast', { pesan: @js(session('pesan')), gagal: true }))"></div>
     @endif
     <x-lihat-foto />
+    <x-konfirmasi />
     @livewireScripts
     @stack('scripts')
 </body>
