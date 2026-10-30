@@ -46,7 +46,7 @@ new #[Layout('layouts.app')] class extends Component
 
     public function mount(): void
     {
-        if (request()->integer('aset')) {
+        if (request()->integer('aset') && PerlengkapanTerpasang::aktif()->whereKey(request()->integer('aset'))->exists()) {
             $this->pilihan = 'lapor';
             $this->pilih(request()->integer('aset'));
         }
@@ -71,7 +71,7 @@ new #[Layout('layouts.app')] class extends Component
     #[Computed]
     public function aset(): ?PerlengkapanTerpasang
     {
-        return $this->asetId ? PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'usulanItem.usulan', 'laporanTerbuka')->find($this->asetId) : null;
+        return $this->asetId ? PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'usulanItem.usulan', 'laporanTerbuka')->aktif()->find($this->asetId) : null;
     }
 
     /** Perlengkapan terpasang di sekitar titik yang ditaruh, ditawarkan agar laporan tertaut. */
@@ -86,7 +86,7 @@ new #[Layout('layouts.app')] class extends Component
     /** Tautkan ke perlengkapan terpasang: titik, wilayah & jenis ikut item. */
     public function pilih(int $id): void
     {
-        $t = LaporanKerusakan::tempatDari(PerlengkapanTerpasang::findOrFail($id));
+        $t = LaporanKerusakan::tempatDari(PerlengkapanTerpasang::aktif()->findOrFail($id));
         $this->asetId = $id;
         [$this->lat, $this->lng] = [$t['lat'] ?: null, $t['lng'] ?: null];
         $this->alamat = (string) $t['alamat'];

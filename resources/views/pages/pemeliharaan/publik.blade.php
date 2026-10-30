@@ -37,6 +37,12 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
             return null;
         }
         abort_unless($item, 404);
+        if ($item->dihapuskan()) {
+            // perlengkapan sudah dihapuskan: tidak bisa dilaporkan; halaman pindai QR menjelaskannya
+            abort_unless($item->kode, 404);
+
+            return $this->redirectRoute('aset', $item->kode);
+        }
         if (auth()->user()?->isPengusul()) {
             return $this->redirectRoute('lapor', ['aset' => $item->id], navigate: true);
         }

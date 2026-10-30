@@ -121,7 +121,7 @@ class LaporanKerusakan extends Model
     /** Perlengkapan yang boleh dilaporkan rusak: semua yang tercatat terpasang. */
     public static function perlengkapanTerpasang(): \Illuminate\Database\Eloquent\Collection
     {
-        return PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan')->get();
+        return PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan')->aktif()->get();
     }
 
     /** Perlengkapan terpasang di sekitar titik laporan (ditawarkan agar laporan tertaut), terdekat dulu. */
@@ -419,6 +419,13 @@ class LaporanKerusakan extends Model
         Pemeliharaan::where('laporan_kerusakan_id', $this->id)->delete();
         $this->update(['status' => SL::MenungguPerbaikan, 'selesai_at' => null, 'catatan_selesai' => null, 'ditutup_oleh' => null]);
         $this->item?->usulan->riwayat()->where('aksi', 'like', "%selesai diperbaiki ({$this->nomor})")->where('created_at', '>=', now()->subMinutes(10))->delete();
+    }
+
+    /** Perlengkapannya dihapuskan Dishub (rusak total, hilang, dibongkar): laporan ditutup. */
+    public function tutupKarenaDihapuskan(?string $alasan): void
+    {
+        $this->update(['status' => SL::Ditolak, 'alasan_tolak' => 'Perlengkapan sudah dihapuskan'.($alasan ? ' ('.str($alasan)->lower().')' : ''), 'ditutup_oleh' => auth()->id()]);
+        $this->kabari('Laporan ditutup', "{$this->judul()} di {$this->lokasi()} sudah dihapuskan dari daftar perlengkapan Dishub. Terima kasih sudah melapor.", 'kerusakan_ditolak');
     }
 
     public function batalkan(): void

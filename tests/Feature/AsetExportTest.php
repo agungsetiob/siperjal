@@ -78,6 +78,12 @@ class AsetExportTest extends TestCase
 
         $rows = $this->baca($this->masuk('dishub')->get(route('terpasang.unduh', ['format' => 'csv', 'sumber' => 'usulan'])), 'csv');
         $this->assertCount(0, $rows);
+
+        // aset yang dihapuskan tidak ikut, kecuali saringan "dihapuskan"
+        $b->fresh()->hapuskan('rusak_total', null, '2026-10-01', User::where('email', 'dishub@usuljalan.test')->first());
+        $this->assertCount(1, $this->baca($this->masuk('dishub')->get(route('terpasang.unduh', ['format' => 'csv'])), 'csv'));
+        $rows = $this->baca($this->masuk('dishub')->get(route('terpasang.unduh', ['format' => 'csv', 'kondisi' => 'dihapuskan'])), 'csv');
+        $this->assertSame('Dihapuskan 2026-10-01 (Rusak total)', $rows[0]['Status']);
     }
 
     public function test_xlsx_bawaan_berisi_tautan_maps_dan_status_rusak(): void

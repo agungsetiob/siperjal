@@ -2,6 +2,7 @@
 @props(['aset', 'bolehCatat' => false, 'kelola' => false, 'penanda' => null])
 @php
     $rusak = (bool) $aset->laporanTerbuka;
+    $hapus = $aset->dihapuskan();
     $foto = $aset->usulanItem?->fotoHasil ?? collect();
     $asal = $aset->usulanItem?->usulan;
     $rawat = $aset->dirawatTerakhir();
@@ -17,7 +18,7 @@
             <div class="flex min-w-0 flex-col gap-2">
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-caption text-[13px] text-fg-muted">
                     <span class="font-semibold text-fg">{{ $aset->jenis->namaPendek() }}@unless ($aset->jenis->per_unit) · {{ number_format($aset->jumlah, 0, ',', '.') }} {{ $aset->jenis->satuan }}@endunless</span>
-                    <x-badge :tone="$rusak ? 'bahaya' : 'sukses'">{{ $rusak ? 'Dilaporkan rusak' : 'Baik' }}</x-badge>
+                    @if ($hapus) <x-badge>Dihapuskan</x-badge> @else <x-badge :tone="$rusak ? 'bahaya' : 'sukses'">{{ $rusak ? 'Dilaporkan rusak' : 'Baik' }}</x-badge> @endif
                     @if ($aset->waktuPasang()) <span>terpasang {{ $aset->waktuPasang() }}</span> @endif
                 </div>
                 @if ($aset->kode)
@@ -39,19 +40,35 @@
                 @if ($aset->kode)
                     <button type="button" @click="qr = true" class="flex h-[38px] flex-1 items-center justify-center gap-2 rounded-sm px-3.5 text-sm font-semibold outline outline-1 -outline-offset-1 outline-fg hover:bg-surface-muted lg:flex-none">@svg('lucide-qr-code', 'size-4') Lihat QR</button>
                 @endif
-                @if ($bolehCatat)
+                @if ($hapus)
+                    @if ($kelola)
+                        <button type="button" wire:click="aktifkanLagi({{ $aset->id }})" wire:loading.attr="disabled" wire:target="aktifkanLagi" class="flex h-[38px] flex-[2] items-center justify-center gap-2 rounded-sm px-4 text-sm font-semibold outline outline-1 -outline-offset-1 outline-fg hover:bg-surface-muted lg:flex-none">@svg('lucide-archive-restore', 'size-4') Aktifkan lagi</button>
+                    @endif
+                @elseif ($bolehCatat)
                     <button type="button" @click="$dispatch('catat-pemeliharaan', { aset: {{ $aset->id }} })" class="flex h-[38px] flex-[2] items-center justify-center gap-2 rounded-sm bg-accent px-4 text-sm font-semibold text-fg-inverse shadow-sm hover:brightness-110 lg:flex-none">@svg('lucide-wrench', 'size-4') Catat pemeliharaan</button>
                 @endif
-                @if ($kelola && $lama)
-                    <button type="button" wire:click="ubah({{ $aset->id }})" class="grid size-[38px] shrink-0 place-items-center rounded-sm text-fg-muted outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted hover:text-fg" aria-label="Ubah" title="Ubah data lama">@svg('lucide-pencil', 'size-4')</button>
-                    @unless ($aset->punyaRiwayat())
-                        <button type="button" @click="$dispatch('konfirmasi', { judul: 'Hapus perlengkapan?', teks: @js($aset->jenis->namaPendek().' di '.$aset->lokasi().' akan dihapus dari daftar aset.'), tombol: 'Hapus', aksi: () => $wire.hapus({{ $aset->id }}) })" class="grid size-[38px] shrink-0 place-items-center rounded-sm text-fg-muted outline outline-1 -outline-offset-1 outline-line hover:bg-danger-bg hover:text-danger" aria-label="Hapus" title="Hapus">@svg('lucide-trash-2', 'size-4')</button>
-                    @endunless
-                @elseif ($kelola && $asal)
-                    <button type="button" @click="$dispatch('toast', { judul: 'Data dari usulan {{ $asal->nomor }}', pesan: 'Jenis, lokasi & harga mengikuti usulan yang disetujui, jadi tidak diubah atau dihapus di sini.' })" class="grid size-[38px] shrink-0 place-items-center rounded-sm text-fg-muted outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted hover:text-fg" aria-label="Kenapa tidak bisa diubah?" title="Data dari usulan, tidak diubah di sini">@svg('lucide-lock', 'size-4')</button>
+                @if ($kelola && ! $hapus)
+                    @if ($lama)
+                        <button type="button" wire:click="ubah({{ $aset->id }})" class="grid size-[38px] shrink-0 place-items-center rounded-sm text-fg-muted outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted hover:text-fg" aria-label="Ubah" title="Ubah data lama">@svg('lucide-pencil', 'size-4')</button>
+                    @endif
+                    <button type="button" wire:click="bukaHapus({{ $aset->id }})" class="grid size-[38px] shrink-0 place-items-center rounded-sm text-fg-muted outline outline-1 -outline-offset-1 outline-line hover:bg-danger-bg hover:text-danger" aria-label="Hapus" title="Hapus / hapuskan aset">@svg('lucide-trash-2', 'size-4')</button>
                 @endif
             </div>
         </div>
+
+        @if ($hapus)
+            <div class="flex gap-3 rounded-md bg-surface-muted p-4">
+                <span class="grid size-10 shrink-0 place-items-center rounded-full bg-bg text-fg-muted">@svg('lucide-archive-x', 'size-5')</span>
+                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                    <span class="text-[15px] font-semibold">Dihapuskan {{ $aset->dihapuskan_at->translatedFormat('j M Y') }} · {{ $aset->alasanHapusLabel() }}</span>
+                    @if ($aset->catatan_hapus) <p class="text-sm leading-[21px] text-fg-muted">{{ $aset->catatan_hapus }}</p> @endif
+                    <span class="font-caption text-xs text-fg-muted">Tidak tampil di daftar Terpasang, peta, dan lapor kerusakan.@if ($aset->penghapus) Oleh {{ $aset->penghapus->name }}.@endif</span>
+                </div>
+                @if ($aset->foto_hapus)
+                    <button type="button" @click="$dispatch('lihat-foto', { foto: [{ url: @js($aset->urlFotoHapus()), ket: @js('Dihapuskan · '.$aset->dihapuskan_at->translatedFormat('j M Y')) }], mulai: 0 })" class="size-16 shrink-0 overflow-hidden rounded-sm" aria-label="Lihat foto penghapusan"><img src="{{ $aset->urlFotoHapus() }}" alt="" class="size-full object-cover"></button>
+                @endif
+            </div>
+        @endif
 
         {{-- Foto saat dipasang + peta --}}
         <div @class(['grid gap-3', 'lg:grid-cols-2' => $foto->isNotEmpty()])>

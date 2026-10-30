@@ -1,4 +1,4 @@
-{{-- Linimasa riwayat satu unit: catatan pemeliharaan (baru di atas) lalu peristiwa "Terpasang". --}}
+{{-- Linimasa riwayat satu unit: "Dihapuskan" (bila ada), catatan pemeliharaan (baru di atas), lalu peristiwa "Terpasang". --}}
 @props(['aset', 'penanda' => null, 'rinci' => true])
 @php
     $catatan = $aset->pemeliharaan;
@@ -6,6 +6,26 @@
     $pasang = $aset->terpasang_at;
 @endphp
 <div class="flex flex-col">
+    @if ($aset->dihapuskan())
+        <div class="flex gap-4">
+            <div class="flex w-14 shrink-0 flex-col items-end pt-0.5 font-caption leading-[15px]">
+                <span class="text-[13px] font-semibold">{{ $aset->dihapuskan_at->translatedFormat('j M') }}</span>
+                <span class="text-xs text-fg-muted">{{ $aset->dihapuskan_at->format('Y') }}</span>
+            </div>
+            <div class="flex flex-col items-center">
+                <span class="mt-1.5 size-2.5 shrink-0 rounded-full bg-fg"></span>
+                <span class="w-px flex-1 bg-line"></span>
+            </div>
+            <div class="mb-5 flex min-w-0 flex-1 flex-col gap-1.5 pb-1">
+                <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                    <span class="text-[15px] font-semibold">Dihapuskan</span>
+                    <span class="rounded-sm bg-surface-muted px-1.5 py-0.5 font-caption text-[11px] font-semibold text-fg-muted">{{ $aset->alasanHapusLabel() }}</span>
+                </div>
+                @if ($rinci && $aset->catatan_hapus) <p class="text-sm leading-[21px] text-fg-muted">{{ $aset->catatan_hapus }}</p> @endif
+                @if ($rinci && $aset->penghapus) <span class="font-caption text-xs text-fg-muted">{{ $aset->penghapus->name }}</span> @endif
+            </div>
+        </div>
+    @endif
     @foreach ($catatan as $p)
         @php $foto = $p->foto; @endphp
         <div class="flex gap-4" wire:key="cat-{{ $p->id }}">
@@ -14,7 +34,7 @@
                 <span class="text-xs text-fg-muted">{{ $p->tanggal->format('Y') }}</span>
             </div>
             <div class="flex flex-col items-center">
-                <span @class(['mt-1.5 size-2.5 shrink-0 rounded-full', 'bg-accent' => $loop->first, 'bg-[#C4C9D8]' => ! $loop->first])></span>
+                <span @class(['mt-1.5 size-2.5 shrink-0 rounded-full', 'bg-accent' => $loop->first && ! $aset->dihapuskan(), 'bg-[#C4C9D8]' => ! $loop->first || $aset->dihapuskan()])></span>
                 <span class="w-px flex-1 bg-line"></span>
             </div>
             <div class="mb-5 flex min-w-0 flex-1 flex-col gap-1.5 pb-1">
@@ -46,7 +66,7 @@
                 <span class="text-[13px] font-semibold">{{ $aset->tahun ?? '—' }}</span>
             @endif
         </div>
-        <div class="flex flex-col items-center"><span class="mt-1.5 size-2.5 shrink-0 rounded-full {{ $catatan->isEmpty() ? 'bg-accent' : 'bg-[#C4C9D8]' }}"></span></div>
+        <div class="flex flex-col items-center"><span class="mt-1.5 size-2.5 shrink-0 rounded-full {{ $catatan->isEmpty() && ! $aset->dihapuskan() ? 'bg-accent' : 'bg-[#C4C9D8]' }}"></span></div>
         <div class="flex min-w-0 flex-1 flex-col gap-1">
             <span class="text-[15px] font-semibold">Terpasang</span>
             <p class="text-sm leading-[21px] text-fg-muted">

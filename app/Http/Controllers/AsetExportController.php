@@ -44,7 +44,7 @@ class AsetExportController extends Controller
                 'Tahun pasang' => $a->terpasang_at?->year ?? $a->tahun,
                 'Sumber' => $a->usulanItem?->usulan?->nomor ?? 'Sebelum SIPERJAL',
                 'Harga satuan' => $a->harga_satuan,
-                'Status' => $a->laporanTerbuka ? 'Dilaporkan rusak' : 'Baik',
+                'Status' => $a->dihapuskan() ? 'Dihapuskan '.$a->dihapuskan_at->format('Y-m-d').' ('.$a->alasanHapusLabel().')' : ($a->laporanTerbuka ? 'Dilaporkan rusak' : 'Baik'),
                 'Pemeliharaan terakhir' => $a->rawat_terakhir ? substr((string) $a->rawat_terakhir, 0, 10) : '',
             ]);
 

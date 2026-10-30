@@ -32,7 +32,7 @@ new class extends Component
     #[Computed]
     public function aset(): ?PerlengkapanTerpasang
     {
-        return $this->asetId ? PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan')->find($this->asetId) : null;
+        return $this->asetId ? PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan')->aktif()->find($this->asetId) : null;
     }
 
     #[On('catat-pemeliharaan')]

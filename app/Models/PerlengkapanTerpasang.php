@@ -5,7 +5,9 @@ namespace App\Models;
 use App\Support\KodeRegister;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Perlengkapan jalan yang terpasang: dari usulan (`usulan_item_id` terisi) atau terpasang sebelum SIPERJAL
@@ -17,9 +19,17 @@ class PerlengkapanTerpasang extends Model
 
     protected $guarded = [];
 
+    /** Alasan penghapusan aset (pilihan di dialog Hapuskan). */
+    public const ALASAN_HAPUS = [
+        'rusak_total' => 'Rusak total',
+        'hilang' => 'Hilang / dicuri',
+        'dibongkar' => 'Dibongkar / dipindah',
+        'lainnya' => 'Lainnya',
+    ];
+
     protected function casts(): array
     {
-        return ['terpasang_at' => 'date', 'lat' => 'float', 'lng' => 'float', 'harga_satuan' => 'integer'];
+        return ['terpasang_at' => 'date', 'dihapuskan_at' => 'date', 'lat' => 'float', 'lng' => 'float', 'harga_satuan' => 'integer'];
     }
 
     protected static function booted(): void
@@ -87,18 +97,81 @@ class PerlengkapanTerpasang extends Model
         return $this->hasOne(LaporanKerusakan::class)->aktif()->latest('id');
     }
 
+    public function penghapus()
+    {
+        return $this->belongsTo(User::class, 'dihapuskan_oleh');
+    }
+
     public function scopeLama(Builder $q): void
     {
         $q->whereNull('usulan_item_id');
     }
 
+    /** Masih terpasang (belum dihapuskan): yang tampil di peta, lapor kerusakan, dan hitungan aset. */
+    public function scopeAktif(Builder $q): void
+    {
+        $q->whereNull('dihapuskan_at');
+    }
+
+    public function scopeSudahDihapuskan(Builder $q): void
+    {
+        $q->whereNotNull('dihapuskan_at');
+    }
+
+    public function dihapuskan(): bool
+    {
+        return $this->dihapuskan_at !== null;
+    }
+
+    public function alasanHapusLabel(): ?string
+    {
+        return $this->alasan_hapus ? (self::ALASAN_HAPUS[$this->alasan_hapus] ?? $this->alasan_hapus) : null;
+    }
+
+    public function urlFotoHapus(): ?string
+    {
+        return $this->foto_hapus ? Storage::disk('public')->url($this->foto_hapus) : null;
+    }
+
+    /**
+     * Hapuskan aset (rusak total, hilang, dibongkar): dinonaktifkan, kode & riwayat tetap tersimpan.
+     * Laporan kerusakan yang masih berjalan ikut ditutup.
+     */
+    public function hapuskan(string $alasan, ?string $catatan, ?string $tanggal, User $oleh, ?UploadedFile $foto = null): void
+    {
+        abort_unless(array_key_exists($alasan, self::ALASAN_HAPUS), 422);
+        throw_if($this->dihapuskan(), \DomainException::class, 'Aset sudah dihapuskan.');
+        $this->update([
+            'dihapuskan_at' => $tanggal ?: today()->toDateString(),
+            'alasan_hapus' => $alasan,
+            'catatan_hapus' => trim((string) $catatan) ?: null,
+            'foto_hapus' => $foto?->store("aset/{$this->id}", 'public'),
+            'dihapuskan_oleh' => $oleh->id,
+        ]);
+        $this->laporanTerbuka?->tutupKarenaDihapuskan($this->alasanHapusLabel());
+        $this->unsetRelation('laporanTerbuka');
+        $this->usulanItem?->usulan->catat("{$this->jenis->namaPendek()}".($this->kode ? " {$this->kode}" : '').' dihapuskan dari daftar aset', $this->alasanHapusLabel(), publik: false);
+    }
+
+    /** Batalkan penghapusan (Urungkan / salah pencet). Laporan yang sudah ditutup tidak dibuka lagi. */
+    public function aktifkanLagi(): void
+    {
+        if ($this->foto_hapus) {
+            Storage::disk('public')->delete($this->foto_hapus);
+        }
+        $this->update(['dihapuskan_at' => null, 'alasan_hapus' => null, 'catatan_hapus' => null, 'foto_hapus' => null, 'dihapuskan_oleh' => null]);
+        $this->usulanItem?->usulan->catat("{$this->jenis->namaPendek()}".($this->kode ? " {$this->kode}" : '').' diaktifkan lagi di daftar aset', publik: false);
+    }
+
     /**
      * Saring daftar aset (dipakai halaman Terpasang dan unduhannya).
-     * Kunci: cari, jenis (id), kecamatan (id), sumber (semua|lama|usulan), kondisi (semua|rusak|belum_berkode).
+     * Kunci: cari, jenis (id), kecamatan (id), sumber (semua|lama|usulan), kondisi (semua|rusak|belum_berkode|dihapuskan).
+     * Selain kondisi `dihapuskan`, hanya aset yang masih terpasang.
      */
     public function scopeSaring(Builder $q, array $f): void
     {
         $cari = trim((string) ($f['cari'] ?? ''));
+        ($f['kondisi'] ?? 'semua') === 'dihapuskan' ? $q->sudahDihapuskan() : $q->aktif();
         $q->when($f['jenis'] ?? null, fn ($q, $v) => $q->where('jenis_perlengkapan_id', $v))
             ->when($f['kecamatan'] ?? null, fn ($q, $v) => $q->where('kecamatan_id', $v))
             ->when(($f['sumber'] ?? 'semua') === 'lama', fn ($q) => $q->lama())
@@ -124,10 +197,10 @@ class PerlengkapanTerpasang extends Model
         $q->whereNull('kode');
     }
 
-    /** Punya riwayat (laporan kerusakan atau pemeliharaan): tidak boleh dihapus. */
+    /** Punya riwayat (laporan kerusakan, pemeliharaan, atau sudah dihapuskan): tidak boleh dihapus permanen. */
     public function punyaRiwayat(): bool
     {
-        return $this->laporanKerusakan()->exists() || $this->pemeliharaan()->exists();
+        return $this->dihapuskan() || $this->laporanKerusakan()->exists() || $this->pemeliharaan()->exists();
     }
 
     public function mapsUrl(): string
@@ -169,7 +242,7 @@ class PerlengkapanTerpasang extends Model
     {
         $d = $radius / 111000;
 
-        return static::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka')
+        return static::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka')->aktif()
             ->whereBetween('lat', [$lat - $d, $lat + $d])
             ->whereBetween('lng', [$lng - $d * 1.5, $lng + $d * 1.5])
             ->when($jenisId, fn ($q) => $q->where('jenis_perlengkapan_id', $jenisId))

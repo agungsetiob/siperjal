@@ -111,7 +111,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
         </div>
 
     @else
-        @php $rusak = $a->laporanTerbuka; @endphp
+        @php $rusak = $a->laporanTerbuka; $hapus = $a->dihapuskan(); @endphp
 
         @if ($staf)
             <div class="flex items-center gap-3 rounded-md bg-accent-deep p-3 text-fg-inverse" wire:key="bilah-sesi">
@@ -131,7 +131,12 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
                 <span class="grid size-14 shrink-0 place-items-center rounded-md text-fg-inverse" style="background: {{ $a->jenis->warna }}">@svg('lucide-'.$a->jenis->ikon, 'size-7')</span>
             </div>
 
-            @if ($rusak)
+            @if ($hapus)
+                <div class="flex items-start gap-3 rounded-sm bg-surface-muted p-3.5">
+                    @svg('lucide-archive-x', 'mt-0.5 size-5 shrink-0 text-fg-muted')
+                    <span class="flex flex-col gap-0.5"><span class="text-[15px] font-semibold">Sudah dihapuskan</span><span class="text-sm text-fg-muted">Perlengkapan ini tidak dipakai lagi sejak {{ $a->dihapuskan_at->translatedFormat('j F Y') }} ({{ str($a->alasanHapusLabel())->lower() }}).</span></span>
+                </div>
+            @elseif ($rusak)
                 <div class="flex items-start gap-3 rounded-sm bg-warning-bg p-3.5 text-warning">
                     @svg('lucide-triangle-alert', 'mt-0.5 size-5 shrink-0')
                     <span class="flex flex-col gap-0.5"><span class="text-[15px] font-semibold">Dilaporkan rusak</span><span class="text-sm">Laporan kerusakan sedang ditangani Dishub.</span></span>
@@ -163,6 +168,17 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
         <div class="flex flex-col gap-3 rounded-md bg-bg p-4" wire:key="aset-riwayat">
             <h2 class="judul text-[22px] leading-6">RIWAYAT PEMELIHARAAN</h2>
             <ol class="flex flex-col">
+                @if ($hapus)
+                    <li class="relative flex gap-3 pb-4">
+                        <span class="absolute bottom-0 left-[5px] top-3 w-px bg-line"></span>
+                        <span class="relative z-[1] mt-1.5 size-[11px] shrink-0 rounded-full bg-fg"></span>
+                        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span class="font-caption text-[13px] text-fg-muted">{{ $a->dihapuskan_at->translatedFormat('j M Y') }}</span>
+                            <span class="text-base font-semibold">Dihapuskan · {{ $a->alasanHapusLabel() }}</span>
+                            @if ($staf && $a->catatan_hapus) <span class="text-[15px] text-fg-muted">{{ $a->catatan_hapus }}</span> @endif
+                        </div>
+                    </li>
+                @endif
                 @foreach ($this->riwayat as $p)
                     <li class="relative flex gap-3 pb-4" wire:key="r-{{ $p->id }}">
                         <span class="absolute bottom-0 left-[5px] top-3 w-px bg-line"></span>
@@ -184,6 +200,7 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
             </ol>
         </div>
 
+        @unless ($hapus)
         <div class="fixed inset-x-0 bottom-0 z-[900] flex gap-2 border-t border-line bg-bg p-3 lg:static lg:border-0 lg:bg-transparent lg:p-0">
             @if ($rusak)
                 <a href="{{ route('lapor.status', $rusak->nomor) }}" wire:navigate class="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-sm text-base font-semibold outline outline-1 -outline-offset-1 outline-line">Lihat status laporan</a>
@@ -195,7 +212,9 @@ new #[Layout('layouts.publik', ['nav' => 'lacak', 'footer' => 'ringkas'])] class
             @endif
         </div>
 
-        @if ($staf)
+        @endunless
+
+        @if ($staf && ! $hapus)
             <livewire:aset.catat :aset-id="$a->id" :key="'catat-'.$a->id" />
         @endif
     @endif

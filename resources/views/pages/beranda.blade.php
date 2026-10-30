@@ -44,14 +44,14 @@ new #[Layout('layouts.publik', ['nav' => 'beranda', 'footer' => 'lengkap'])] #[T
             'masuk' => Usulan::whereYear('diajukan_at', $tahun)->count(),
             'disetujui' => UsulanItem::whereYear('diputuskan_at', $tahun)->whereIn('status', [StatusItem::Disetujui, StatusItem::Terpasang])->count(),
             // titik = lokasi unik per jenis (3 lampu di satu tiang dihitung satu titik)
-            'terpasang' => PerlengkapanTerpasang::select('jenis_perlengkapan_id', 'lat', 'lng')->distinct()->get()->count(),
+            'terpasang' => PerlengkapanTerpasang::aktif()->select('jenis_perlengkapan_id', 'lat', 'lng')->distinct()->get()->count(),
         ];
     }
 
     #[Computed]
     public function terpasang()
     {
-        return PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka')
+        return PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka')->aktif()
             ->orderByRaw('terpasang_at is null')->latest('terpasang_at')->latest('id')->limit(1500)->get();
     }
 

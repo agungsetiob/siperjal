@@ -31,7 +31,7 @@ class LabelQrController extends Controller
             'ukuran' => ['required', 'in:'.implode(',', array_keys(self::UKURAN))],
         ], ['ids.required' => 'Pilih minimal satu unit.', 'ids.min' => 'Pilih minimal satu unit.', 'ukuran.in' => 'Ukuran label tidak dikenal.']);
 
-        $unit = PerlengkapanTerpasang::with('jenis', 'kecamatan')->whereIn('id', $ids)->whereNotNull('kode')->orderBy('kode')->get();
+        $unit = PerlengkapanTerpasang::with('jenis', 'kecamatan')->whereIn('id', $ids)->aktif()->whereNotNull('kode')->orderBy('kode')->get();
         if ($unit->isEmpty()) {
             throw ValidationException::withMessages(['ids' => 'Unit yang dipilih belum berkode register, jadi belum bisa dicetak labelnya.']);
         }

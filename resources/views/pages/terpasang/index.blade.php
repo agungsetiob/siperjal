@@ -45,7 +45,7 @@ new #[Layout('layouts.app')] class extends Component
     public ?int $pilih = null;
 
     #[Url]
-    public string $kondisi = 'semua'; // semua | rusak | belum_berkode
+    public string $kondisi = 'semua'; // semua | rusak | belum_berkode | dihapuskan
 
     #[Url(as: 'kec')]
     public ?int $kecamatanFilter = null;
@@ -72,7 +72,16 @@ new #[Layout('layouts.app')] class extends Component
 
     public const MAKS_LABEL = 200;
 
-    public ?string $dialog = null; // form | impor
+    public ?string $dialog = null; // form | impor | hapus
+
+    // Hapus aset: hapuskan (rusak total, hilang, dibongkar; kode & riwayat tetap) atau hapus permanen (salah input)
+    public ?int $hapusId = null;
+    public string $hapusMode = 'hapuskan'; // hapuskan | permanen
+    public string $alasanHapus = 'rusak_total';
+    public ?string $tanggalHapus = null;
+    public string $catatanHapus = '';
+    public $fotoHapus = null;
+    public ?int $hapuskanTerakhir = null; // untuk Urungkan
 
     // Form
     public ?int $ubahId = null;
@@ -167,11 +176,12 @@ new #[Layout('layouts.app')] class extends Component
     public function jumlahSemua(): array
     {
         return [
-            'semua' => PerlengkapanTerpasang::count(),
-            'lama' => PerlengkapanTerpasang::lama()->count(),
-            'nilai' => (int) PerlengkapanTerpasang::sum(DB::raw('jumlah * harga_satuan')), // harga kosong tidak dihitung
-            'rusak' => PerlengkapanTerpasang::whereHas('laporanTerbuka')->count(),
-            'belum_berkode' => PerlengkapanTerpasang::belumBerkode()->count(),
+            'semua' => PerlengkapanTerpasang::aktif()->count(),
+            'lama' => PerlengkapanTerpasang::aktif()->lama()->count(),
+            'nilai' => (int) PerlengkapanTerpasang::aktif()->sum(DB::raw('jumlah * harga_satuan')), // harga kosong tidak dihitung
+            'rusak' => PerlengkapanTerpasang::aktif()->whereHas('laporanTerbuka')->count(),
+            'belum_berkode' => PerlengkapanTerpasang::aktif()->belumBerkode()->count(),
+            'dihapuskan' => PerlengkapanTerpasang::sudahDihapuskan()->count(),
         ];
     }
 
@@ -179,7 +189,7 @@ new #[Layout('layouts.app')] class extends Component
     #[Computed]
     public function aset(): ?PerlengkapanTerpasang
     {
-        return $this->pilih ? PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka', 'usulanItem.fotoHasil', 'usulanItem.usulan.instansi',
+        return $this->pilih ? PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka', 'penghapus', 'usulanItem.fotoHasil', 'usulanItem.usulan.instansi',
             'pemeliharaan.petugas', 'pemeliharaan.foto', 'pemeliharaan.laporan')->find($this->pilih) : null;
     }
 
@@ -344,7 +354,7 @@ new #[Layout('layouts.app')] class extends Component
     public function ubah(int $id): void
     {
         abort_unless($this->kelola, 403);
-        $a = PerlengkapanTerpasang::lama()->findOrFail($id);
+        $a = PerlengkapanTerpasang::lama()->aktif()->findOrFail($id);
         $this->ubahId = $a->id;
         $this->items = [['jenis' => $a->jenis_perlengkapan_id, 'jumlah' => $a->jumlah, 'harga' => $a->harga_satuan]];
         [$this->lat, $this->lng] = [$a->lat, $a->lng];
@@ -496,8 +506,67 @@ new #[Layout('layouts.app')] class extends Component
         }
         $a->delete();
         LogPengaturan::catat("Perlengkapan terpasang {$a->jenis->namaPendek()} dihapus (data lama)");
+        $this->tutup();
         unset($this->daftar, $this->jumlahSemua);
         $this->dispatch('toast', pesan: 'Perlengkapan dihapus');
+    }
+
+    // ── Hapuskan aset (rusak total, hilang, dibongkar)
+    public function bukaHapus(int $id): void
+    {
+        abort_unless($this->kelola, 403);
+        abort_unless(PerlengkapanTerpasang::aktif()->whereKey($id)->exists(), 404);
+        $this->tutup();
+        $this->hapusId = $id;
+        $this->tanggalHapus = today()->toDateString();
+        $this->dialog = 'hapus';
+    }
+
+    #[Computed]
+    public function asetHapus(): ?PerlengkapanTerpasang
+    {
+        return $this->hapusId ? PerlengkapanTerpasang::with('jenis', 'desa', 'kecamatan', 'laporanTerbuka')->find($this->hapusId) : null;
+    }
+
+    /** Hapus permanen hanya untuk data lama yang belum punya riwayat (salah input). */
+    #[Computed]
+    public function bolehHapusPermanen(): bool
+    {
+        return (bool) $this->asetHapus?->adalahLama() && ! $this->asetHapus->punyaRiwayat();
+    }
+
+    public function hapuskan(): void
+    {
+        abort_unless($this->kelola, 403);
+        $this->validate([
+            'alasanHapus' => 'required|in:'.implode(',', array_keys(PerlengkapanTerpasang::ALASAN_HAPUS)),
+            'tanggalHapus' => 'required|date|before_or_equal:today',
+            'catatanHapus' => 'nullable|required_if:alasanHapus,lainnya|string|max:500',
+            'fotoHapus' => 'nullable|image|max:10240',
+        ], [
+            'tanggalHapus.before_or_equal' => 'Tanggal tidak boleh setelah hari ini.',
+            'catatanHapus.required_if' => 'Tulis alasannya.',
+            'fotoHapus.image' => 'Berkas harus berupa foto.',
+            'fotoHapus.max' => 'Foto maksimal 10 MB.',
+        ]);
+        $a = PerlengkapanTerpasang::aktif()->with('jenis', 'laporanTerbuka', 'usulanItem.usulan')->findOrFail($this->hapusId);
+        DB::transaction(fn () => $a->hapuskan($this->alasanHapus, $this->catatanHapus, $this->tanggalHapus, auth()->user(), $this->fotoHapus));
+        $nama = $a->jenis->namaPendek();
+        LogPengaturan::catat("Perlengkapan terpasang {$nama}".($a->kode ? " {$a->kode}" : '')." dihapuskan ({$a->alasanHapusLabel()})");
+        $this->hapuskanTerakhir = $a->id;
+        $this->tutup();
+        unset($this->daftar, $this->jumlahSemua, $this->aset);
+        $this->dispatch('toast', pesan: "{$nama} dihapuskan", urungkan: 'aset-hapuskan:'.$a->id);
+    }
+
+    public function aktifkanLagi(int $id): void
+    {
+        abort_unless($this->kelola, 403);
+        $a = PerlengkapanTerpasang::sudahDihapuskan()->with('jenis', 'usulanItem.usulan')->findOrFail($id);
+        $a->aktifkanLagi();
+        LogPengaturan::catat("Perlengkapan terpasang {$a->jenis->namaPendek()}".($a->kode ? " {$a->kode}" : '').' diaktifkan lagi');
+        unset($this->daftar, $this->jumlahSemua, $this->aset);
+        $this->dispatch('toast', pesan: "{$a->jenis->namaPendek()} aktif lagi");
     }
 
     // ── Impor Excel/CSV
@@ -555,6 +624,12 @@ new #[Layout('layouts.app')] class extends Component
     #[\Livewire\Attributes\On('urungkan')]
     public function urungkan(string $token): void
     {
+        if (str_starts_with($token, 'aset-hapuskan:') && (int) substr($token, 14) === $this->hapuskanTerakhir) {
+            $this->aktifkanLagi($this->hapuskanTerakhir);
+            $this->hapuskanTerakhir = null;
+
+            return;
+        }
         if (! str_starts_with($token, 'impor-terpasang:') || substr($token, 16) !== $this->batchTerakhir) {
             return;
         }
@@ -574,6 +649,7 @@ new #[Layout('layouts.app')] class extends Component
 
     private function resetForm(): void
     {
+        $this->reset('hapusId', 'hapusMode', 'alasanHapus', 'tanggalHapus', 'catatanHapus', 'fotoHapus');
         $this->reset('ubahId', 'lat', 'lng', 'alamat', 'kecamatan_id', 'desa_id', 'tahun', 'catatan');
         $this->items = [self::itemBaru()];
         $this->resetErrorBag();
@@ -696,13 +772,14 @@ new #[Layout('layouts.app')] class extends Component
                                 navigator.geolocation.getCurrentPosition((p) => { this.cari = false; $wire.urutDekat(p.coords.latitude, p.coords.longitude) }, () => { this.cari = false; this.galat = true }, { enableHighAccuracy: true, timeout: 10000 }) } }">
                         <button type="button" @if ($dekat) wire:click="hapusDekat" @else @click="dekat()" @endif @class(['flex items-center gap-1.5 rounded-full px-2.5 py-1 font-caption text-xs font-semibold outline outline-1 -outline-offset-1', 'bg-accent text-fg-inverse outline-accent' => $dekat, 'text-accent outline-line hover:bg-accent-soft' => ! $dekat])>@svg('lucide-locate-fixed', 'size-3.5') <span x-show="! cari">Dekat saya</span><span x-show="cari" x-cloak>Mencari lokasi…</span></button>
                         <span x-show="galat" x-cloak class="self-center font-caption text-xs text-danger">Lokasi tidak bisa dibaca. Izinkan akses lokasi di peramban.</span>
-                    @if ($jml['rusak'] || $jml['belum_berkode'])
-                            @foreach ([['rusak', $jml['rusak'], 'dilaporkan rusak', 'triangle-alert'], ['belum_berkode', $jml['belum_berkode'], 'belum berkode', 'circle-dashed']] as [$k, $n, $l, $ik])
-                                @if ($n)
-                                    <button type="button" wire:click="saringKondisi('{{ $k }}')" @class(['flex items-center gap-1.5 rounded-full px-2.5 py-1 font-caption text-xs font-semibold outline outline-1 -outline-offset-1', 'bg-warning-bg text-warning outline-warning' => $kondisi === $k, 'text-warning outline-line hover:bg-warning-bg' => $kondisi !== $k])>@svg('lucide-'.$ik, 'size-3.5') {{ $n }} {{ $l }}</button>
-                                @endif
-                            @endforeach
-                    @endif
+                    @foreach ([['rusak', $jml['rusak'], 'dilaporkan rusak', 'triangle-alert'], ['belum_berkode', $jml['belum_berkode'], 'belum berkode', 'circle-dashed'], ['dihapuskan', $jml['dihapuskan'], 'dihapuskan', 'archive-x']] as [$k, $n, $l, $ik])
+                        @if ($n || $kondisi === $k)
+                            @php $netral = $k === 'dihapuskan'; @endphp
+                            <button type="button" wire:click="saringKondisi('{{ $k }}')" @class(['flex items-center gap-1.5 rounded-full px-2.5 py-1 font-caption text-xs font-semibold outline outline-1 -outline-offset-1',
+                                'bg-warning-bg text-warning outline-warning' => ! $netral && $kondisi === $k, 'text-warning outline-line hover:bg-warning-bg' => ! $netral && $kondisi !== $k,
+                                'bg-fg text-fg-inverse outline-fg' => $netral && $kondisi === $k, 'text-fg-muted outline-line hover:bg-surface-muted' => $netral && $kondisi !== $k])>@svg('lucide-'.$ik, 'size-3.5') {{ $n }} {{ $l }}</button>
+                        @endif
+                    @endforeach
                     </div>
                 </div>
             @else
@@ -976,6 +1053,95 @@ new #[Layout('layouts.app')] class extends Component
                     <x-tombol wire:click="terapkanImpor" :disabled="! $sah" wire:loading.attr="disabled" wire:target="terapkanImpor">Simpan {{ $sah ? count($sah).' perlengkapan' : '' }}</x-tombol>
                 </div>
             </div>
+        </div>
+    @endif
+
+    {{-- ── Hapus aset: hapuskan (kode & riwayat tetap) / hapus permanen (salah input) ── --}}
+    @if ($dialog === 'hapus' && ($ah = $this->asetHapus))
+
+        <div class="fixed inset-0 z-[3000] flex items-end justify-center bg-fg/50 sm:items-center" wire:click.self="tutup" x-data @keydown.escape.window="$wire.tutup()" wire:key="dialog-hapus">
+            <form wire:submit="hapuskan" class="flex max-h-[92dvh] w-full flex-col gap-5 overflow-y-auto rounded-t-xl bg-bg p-6 shadow-xl sm:max-w-md sm:rounded-md">
+                <div class="flex gap-3">
+                    <div class="flex min-w-0 flex-1 flex-col gap-1">
+                        <span class="font-caption text-xs font-semibold tracking-[0.4px] text-accent">{{ $ah->kode ?? 'Belum berkode' }}</span>
+                        <h3 class="judul text-[28px] leading-7">Hapus aset</h3>
+                        <span class="text-sm text-fg-muted">{{ $ah->jenis->namaPendek() }} · {{ $ah->lokasi() }}</span>
+                    </div>
+                    <button type="button" wire:click="tutup" class="grid size-10 shrink-0 place-items-center rounded-full bg-surface-muted" aria-label="Tutup">@svg('lucide-x', 'size-5')</button>
+                </div>
+
+                @if ($this->bolehHapusPermanen)
+                    <div class="flex gap-0.5 rounded-sm bg-surface-muted p-[3px] font-caption text-[13px]">
+                        @foreach (['hapuskan' => 'Hapuskan', 'permanen' => 'Hapus permanen'] as $v => $l)
+                            <button type="button" wire:click="$set('hapusMode', '{{ $v }}')" @class(['flex-1 rounded-sm py-2', 'bg-bg font-semibold shadow-sm' => $hapusMode === $v, 'font-medium text-fg-muted' => $hapusMode !== $v])>{{ $l }}</button>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if ($hapusMode === 'permanen' && $this->bolehHapusPermanen)
+                    <div class="flex flex-col gap-2 rounded-sm bg-danger-bg p-4 text-sm text-danger">
+                        <span class="flex items-center gap-2 font-semibold">@svg('lucide-triangle-alert', 'size-4') Untuk data yang salah input</span>
+                        <span class="leading-[21px]">Data{{ $ah->kode ? ' dan kode '.$ah->kode : '' }} hilang selamanya dan tidak bisa diurungkan. Kalau perlengkapannya rusak, hilang, atau dibongkar, pakai <b>Hapuskan</b> supaya riwayatnya tetap tersimpan.</span>
+                    </div>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <x-tombol variant="teks" wire:click="tutup">Batal</x-tombol>
+                        <x-tombol variant="bahaya" ikon="trash-2" wire:click="hapus({{ $ah->id }})" wire:loading.attr="disabled" wire:target="hapus">Hapus permanen</x-tombol>
+                    </div>
+                @else
+                    <p class="-mt-1 text-sm leading-[21px] text-fg-muted">Aset tidak tampil lagi di daftar Terpasang, peta, dan lapor kerusakan. Kode dan riwayatnya tetap tersimpan, dan bisa diaktifkan lagi.</p>
+                    @if ($ah->laporanTerbuka)
+                        <span class="flex items-start gap-2 rounded-sm bg-warning-bg px-3 py-2.5 text-sm text-warning">@svg('lucide-triangle-alert', 'mt-0.5 size-4 shrink-0') Laporan kerusakan {{ $ah->laporanTerbuka->nomor }} yang masih berjalan akan ditutup, dan pelapor dikabari.</span>
+                    @endif
+
+                    <div class="flex flex-col gap-2.5">
+                        <span class="text-base font-semibold">Alasan</span>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach (\App\Models\PerlengkapanTerpasang::ALASAN_HAPUS as $k => $label)
+                                <button type="button" wire:click="$set('alasanHapus', '{{ $k }}')" wire:key="alasan-{{ $k }}" @class([
+                                    'flex h-10 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold',
+                                    'bg-fg text-fg-inverse' => $alasanHapus === $k,
+                                    'outline outline-1 -outline-offset-1 outline-line hover:bg-surface-muted' => $alasanHapus !== $k,
+                                ])>@if ($alasanHapus === $k) @svg('lucide-check', 'size-4') @endif {{ $label }}</button>
+                            @endforeach
+                        </div>
+                        @error('alasanHapus') <span class="text-sm text-danger">{{ $message }}</span> @enderror
+                    </div>
+
+                    <label class="flex flex-col gap-2.5">
+                        <span class="text-base font-semibold">Tanggal</span>
+                        <input type="date" wire:model="tanggalHapus" max="{{ today()->toDateString() }}" class="input">
+                        @error('tanggalHapus') <span class="text-sm text-danger">{{ $message }}</span> @enderror
+                    </label>
+
+                    <label class="flex flex-col gap-2.5">
+                        <span class="text-base font-semibold">Catatan @if ($alasanHapus !== 'lainnya')<span class="font-caption text-sm font-normal text-fg-muted">opsional</span>@endif</span>
+                        <textarea wire:model="catatanHapus" rows="2" maxlength="500" placeholder="Mis. tiang patah ditabrak truk, sudah dibongkar" class="input"></textarea>
+                        @error('catatanHapus') <span class="text-sm text-danger">{{ $message }}</span> @enderror
+                    </label>
+
+                    <div class="flex flex-col gap-2.5">
+                        <span class="text-base font-semibold">Foto <span class="font-caption text-sm font-normal text-fg-muted">opsional</span></span>
+                        @if ($fotoHapus && ! $errors->has('fotoHapus'))
+                            <div class="relative size-24 overflow-hidden rounded-md">
+                                <img src="{{ $fotoHapus->temporaryUrl() }}" class="size-full object-cover" alt="">
+                                <button type="button" wire:click="$set('fotoHapus', null)" class="absolute right-0 top-0 grid size-11 place-items-center" aria-label="Hapus foto"><span class="grid size-7 place-items-center rounded-full bg-fg/80 text-fg-inverse">@svg('lucide-x', 'size-4')</span></button>
+                            </div>
+                        @else
+                            <label class="flex size-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-md bg-accent-soft text-accent outline outline-[1.5px] -outline-offset-1 outline-accent">
+                                @svg('lucide-camera', 'size-6')
+                                <span class="font-caption text-[13px] font-semibold"><span wire:loading.remove wire:target="fotoHapus">Tambah</span><span wire:loading wire:target="fotoHapus">Mengunggah…</span></span>
+                                <input type="file" wire:model="fotoHapus" accept="image/*" capture="environment" class="hidden">
+                            </label>
+                        @endif
+                        @error('fotoHapus') <span class="text-sm text-danger">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <x-tombol variant="teks" wire:click="tutup">Batal</x-tombol>
+                        <x-tombol type="submit" variant="bahaya" ikon="archive-x" wire:loading.attr="disabled" wire:target="hapuskan,fotoHapus">Hapuskan aset</x-tombol>
+                    </div>
+                @endif
+            </form>
         </div>
     @endif
 
