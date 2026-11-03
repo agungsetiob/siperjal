@@ -60,7 +60,7 @@
                 <div class="flex flex-col gap-10 lg:flex-row lg:gap-10 xl:gap-16">
                     <div class="flex flex-col gap-4 lg:w-[280px] lg:shrink-0 xl:w-[340px]">
                         <x-logo terang />
-                        <p class="max-w-[360px] text-[15px] leading-[23px] text-[#C9CBD1]">Layanan usulan perlengkapan jalan untuk masyarakat dan instansi. Dikelola Dinas Perhubungan bersama Bappeda.</p>
+                        <p class="max-w-[360px] text-[15px] leading-[23px] text-[#C9CBD1]">Layanan usulan perlengkapan jalan untuk masyarakat dan instansi. Dikelola Dinas Perhubungan.</p>
                         <x-logo-instansi terang besar />
                     </div>
                     @foreach ([

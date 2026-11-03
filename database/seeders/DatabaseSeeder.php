@@ -54,7 +54,7 @@ class DatabaseSeeder extends Seeder
 
         // $desaKersik = Instansi::create(['nama' => 'Pemerintah Desa Kersik Putih', 'jenis' => 'desa', 'kecamatan_id' => 1]);
 
-        User::create(['name' => 'Admin SIPERJAL', 'email' => 'admin@usuljalan.test', 'role' => Role::Admin, 'password' => 'password']);
+        User::create(['name' => 'Admin SIPERJAL', 'email' => 'rsud@tanahbumbukab.go.id', 'role' => Role::Admin, 'password' => 'password']);
         // User::create(['name' => 'Rina Dishub', 'email' => 'dishub@usuljalan.test', 'role' => Role::Dishub, 'jabatan' => 'Pemeriksa', 'no_hp' => '081200000003']);
         // User::create(['name' => 'Ahmad Fauzi', 'email' => 'petugas@usuljalan.test', 'role' => Role::Dishub, 'petugas_lapangan' => true, 'jabatan' => 'Petugas lapangan', 'no_hp' => '081200000005']);
         // User::create(['name' => 'Bima Bappeda', 'email' => 'bappeda@usuljalan.test', 'role' => Role::Bappeda, 'jabatan' => 'Perencana Anggaran', 'no_hp' => '081200000004']);
