@@ -59,6 +59,7 @@ new #[Layout('layouts.app')] class extends Component
     public bool $tandai = false;
     public array $terpilih = [];
     public string $ukuranLabel = 'sedang'; // sedang | kecil
+    public string $tataLabel = 'a4'; // a4 (banyak label per lembar A4) | satuan (satu label per halaman seukuran label)
 
     // Riwayat
     #[Url]
@@ -320,6 +321,14 @@ new #[Layout('layouts.app')] class extends Component
     public function pilihSemua(): void
     {
         $this->terpilih = $this->queryDaftar()->whereNotNull('kode')->orderBy('id')->limit(5000)->pluck('id')->all();
+    }
+
+    /** Bilah HP: satu pilihan gabungan "tata:ukuran". */
+    public function aturCetak(string $pilihan): void
+    {
+        [$tata, $ukuran] = array_pad(explode(':', $pilihan), 2, null);
+        abort_unless(in_array($tata, ['a4', 'satuan'], true) && in_array($ukuran, ['sedang', 'kecil'], true), 422);
+        [$this->tataLabel, $this->ukuranLabel] = [$tata, $ukuran];
     }
 
     public function bersihkanPilihan(): void
@@ -678,6 +687,8 @@ new #[Layout('layouts.app')] class extends Component
     $punyaSaringan = $cari !== '' || $jenisFilter || $kecamatanFilter || $sumber !== 'semua' || $kondisi !== 'semua' || ($tab === 'riwayat' && ($sumberRiwayat !== 'semua' || $petugasFilter));
     $namaHari = fn (\Illuminate\Support\Carbon $t) => $t->isToday() ? 'Hari ini' : ($t->isYesterday() ? 'Kemarin' : $t->translatedFormat('l'));
     $perLembar = ['sedang' => 24, 'kecil' => 65][$ukuranLabel] ?? 24;
+    $mmLabel = ['sedang' => '60 × 30 mm', 'kecil' => '40 × 20 mm'][$ukuranLabel] ?? '60 × 30 mm';
+    $satuan = $tataLabel === 'satuan';
     $nTerpilih = count($terpilih);
     $unduh = $this->parameterUnduh();
     $sel = 'input py-2 text-sm';
@@ -858,7 +869,12 @@ new #[Layout('layouts.app')] class extends Component
             <form method="POST" action="{{ route('terpasang.label') }}" target="_blank" class="fixed inset-x-0 bottom-0 z-[1001] flex items-center gap-2 border-t border-line bg-bg px-4 pb-6 pt-3 shadow-[0_-4px_12px_#0000000a] lg:hidden">
                 @csrf
                 @foreach (array_slice($terpilih, 0, self::MAKS_LABEL) as $id) <input type="hidden" name="ids[]" value="{{ $id }}"> @endforeach
-                <select name="ukuran" wire:model.live="ukuranLabel" class="input h-11 w-36 py-0 text-sm"><option value="sedang">Sedang 60×30</option><option value="kecil">Kecil 40×20</option></select>
+                <input type="hidden" name="ukuran" value="{{ $ukuranLabel }}"><input type="hidden" name="tata" value="{{ $tataLabel }}">
+                <select wire:change="aturCetak($event.target.value)" class="input h-11 w-40 py-0 text-sm" aria-label="Tata letak dan ukuran label">
+                    @foreach (['a4:sedang' => 'A4 · Sedang', 'a4:kecil' => 'A4 · Kecil', 'satuan:sedang' => 'Per label · Sedang', 'satuan:kecil' => 'Per label · Kecil'] as $v => $l)
+                        <option value="{{ $v }}" @selected($v === $tataLabel.':'.$ukuranLabel)>{{ $l }}</option>
+                    @endforeach
+                </select>
                 <button @disabled(! $nTerpilih || $nTerpilih > self::MAKS_LABEL) class="flex h-11 flex-1 items-center justify-center gap-2 rounded-sm bg-accent text-sm font-semibold text-fg-inverse disabled:opacity-40">@svg('lucide-printer', 'size-4') Cetak {{ $nTerpilih }} label</button>
             </form>
         @endif
@@ -875,10 +891,20 @@ new #[Layout('layouts.app')] class extends Component
                 <div class="flex flex-col gap-1">
                     <span class="font-caption text-[11px] font-semibold uppercase tracking-[0.8px] text-fg-muted">Cetak label QR</span>
                     <h2 class="judul text-[28px] leading-8">{{ $nTerpilih }} label</h2>
-                    <span class="text-sm text-fg-muted">{{ $nTerpilih ? ceil(min($nTerpilih, self::MAKS_LABEL) / $perLembar).' lembar A4 · dari '.$nTerpilih.' unit yang dipilih di daftar' : 'Centang unit di daftar (hanya yang sudah berkode).' }}</span>
+                    <span class="text-sm text-fg-muted">{{ ! $nTerpilih ? 'Centang unit di daftar (hanya yang sudah berkode).' : ($satuan ? min($nTerpilih, self::MAKS_LABEL).' halaman · '.$mmLabel.' · satu label per halaman' : ceil(min($nTerpilih, self::MAKS_LABEL) / $perLembar).' lembar A4 · dari '.$nTerpilih.' unit yang dipilih di daftar') }}</span>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <span class="text-sm font-semibold">Tata letak</span>
+                    <div class="flex gap-0.5 rounded-sm bg-surface-muted p-[3px] font-caption text-[13px]">
+                        @foreach (['a4' => ['Lembar A4', 'Banyak label · kertas stiker A4'], 'satuan' => ['Satu label per halaman', 'Halaman seukuran label · printer label']] as $v => [$judulT, $ketT])
+                            <button type="button" wire:click="$set('tataLabel', '{{ $v }}')" @class(['flex flex-1 flex-col items-center gap-0.5 rounded-sm px-2 py-2', 'bg-bg shadow-sm' => $tataLabel === $v, 'text-fg-muted hover:text-fg' => $tataLabel !== $v])>
+                                <span @class(['font-semibold' => $tataLabel === $v, 'font-medium' => $tataLabel !== $v])>{{ $judulT }}</span><span class="text-[11px] text-fg-muted">{{ $ketT }}</span>
+                            </button>
+                        @endforeach
+                    </div>
                 </div>
                 <div class="grid gap-3 sm:grid-cols-2">
-                    @foreach (['sedang' => ['Sedang · 60 × 30 mm', '24 label per lembar · mudah dipindai dari 1 m'], 'kecil' => ['Kecil · 40 × 20 mm', '65 label per lembar · untuk tiang ramping']] as $v => [$judulU, $ketU])
+                    @foreach (['sedang' => ['Sedang · 60 × 30 mm', $satuan ? 'Mudah dipindai dari 1 m' : '24 label per lembar · mudah dipindai dari 1 m'], 'kecil' => ['Kecil · 40 × 20 mm', $satuan ? 'Untuk tiang ramping' : '65 label per lembar · untuk tiang ramping']] as $v => [$judulU, $ketU])
                         <label @class(['flex cursor-pointer flex-col gap-1 rounded-md p-4 outline -outline-offset-1', 'bg-accent-soft outline-2 outline-accent' => $ukuranLabel === $v, 'outline-1 outline-line hover:bg-surface-muted' => $ukuranLabel !== $v])>
                             <input type="radio" wire:model.live="ukuranLabel" value="{{ $v }}" class="sr-only">
                             <span class="text-sm font-semibold">{{ $judulU }}</span><span class="text-xs text-fg-muted">{{ $ketU }}</span>
@@ -887,11 +913,26 @@ new #[Layout('layouts.app')] class extends Component
                 </div>
                 @php $contoh = $this->daftar->whereIn('id', $terpilih)->take($perLembar); @endphp
                 <div class="rounded-md bg-surface-muted p-4">
+                    @if ($satuan)
+                        {{-- satu kartu = satu halaman PDF seukuran label --}}
+                        <div class="flex flex-wrap justify-center gap-3" aria-label="Pratinjau halaman label">
+                            @forelse ($contoh->take(6) as $c)
+                                <div @class(['flex items-center gap-2 rounded-[3px] bg-white p-2 shadow-sm', 'h-[60px] w-[120px]' => $ukuranLabel === 'sedang', 'h-[44px] w-[88px]' => $ukuranLabel === 'kecil'])>
+                                    <span @class(['shrink-0 bg-[repeating-conic-gradient(#000100_0_25%,#fff_0_50%)] bg-[length:6px_6px]', 'size-11' => $ukuranLabel === 'sedang', 'size-7' => $ukuranLabel === 'kecil'])></span>
+                                    <span @class(['min-w-0 break-all font-caption font-bold leading-tight', 'text-[9px]' => $ukuranLabel === 'sedang', 'text-[7px]' => $ukuranLabel === 'kecil'])>{{ $c->kode }}</span>
+                                </div>
+                            @empty
+                                <div @class(['rounded-[3px] bg-white shadow-sm outline-dashed outline-1 -outline-offset-1 outline-line', 'h-[60px] w-[120px]' => $ukuranLabel === 'sedang', 'h-[44px] w-[88px]' => $ukuranLabel === 'kecil'])></div>
+                            @endforelse
+                            @if ($nTerpilih > 6) <span class="self-center font-caption text-xs text-fg-muted">+{{ min($nTerpilih, self::MAKS_LABEL) - 6 }} halaman</span> @endif
+                        </div>
+                    @else
                     <div class="mx-auto grid max-w-[420px] gap-1.5 rounded-sm bg-white p-3 shadow-sm" style="grid-template-columns: repeat({{ $ukuranLabel === 'sedang' ? 3 : 5 }}, minmax(0, 1fr))" aria-label="Pratinjau lembar A4">
                         @for ($i = 0; $i < min($perLembar, $ukuranLabel === 'sedang' ? 12 : 20); $i++)
                             <span @class(['aspect-[2/1] rounded-[3px] outline outline-1 -outline-offset-1', 'bg-accent-soft outline-accent' => $i < $nTerpilih, 'outline-line' => $i >= $nTerpilih])></span>
                         @endfor
                     </div>
+                    @endif
                 </div>
                 @if ($nTerpilih > self::MAKS_LABEL)
                     <span class="flex items-center gap-2 rounded-sm bg-warning-bg px-3 py-2 text-sm text-warning">@svg('lucide-triangle-alert', 'size-4 shrink-0') Maksimal {{ self::MAKS_LABEL }} label sekali unduh. Untuk lebih banyak, saring per kecamatan lalu cetak bertahap.</span>
@@ -902,8 +943,9 @@ new #[Layout('layouts.app')] class extends Component
                     @csrf
                     @foreach (array_slice($terpilih, 0, self::MAKS_LABEL) as $id) <input type="hidden" name="ids[]" value="{{ $id }}"> @endforeach
                     <input type="hidden" name="ukuran" value="{{ $ukuranLabel }}">
+                    <input type="hidden" name="tata" value="{{ $tataLabel }}">
                     <button @disabled(! $nTerpilih || $nTerpilih > self::MAKS_LABEL) class="flex h-12 items-center justify-center gap-2 rounded-sm bg-accent text-[15px] font-semibold text-fg-inverse shadow-sm hover:brightness-110 disabled:opacity-40">@svg('lucide-download', 'size-[18px]') Unduh PDF label</button>
-                    <span class="text-center text-xs text-fg-muted">PDF siap cetak di kertas stiker A4, skala 100%</span>
+                    <span class="text-center text-xs text-fg-muted">{{ $satuan ? 'Atur ukuran kertas printer ke '.$mmLabel.', skala 100%' : 'PDF siap cetak di kertas stiker A4, skala 100%' }}</span>
                 </form>
             </div>
         @elseif ($pilih && $this->aset)

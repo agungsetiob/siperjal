@@ -8,10 +8,15 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
-/** Cetak label QR (PDF A4) untuk unit terpasang yang sudah berkode register. */
+/**
+ * Cetak label QR untuk unit terpasang yang sudah berkode register.
+ * Tata letak `a4`: banyak label per lembar A4 (kertas stiker); `satuan`: satu label per halaman seukuran label (printer label).
+ */
 class LabelQrController extends Controller
 {
     public const MAKS = 200;
+
+    public const TATA = ['a4', 'satuan'];
 
     /** ukuran => [lebar mm, tinggi mm, kolom, baris per lembar] */
     public const UKURAN = [
@@ -29,7 +34,9 @@ class LabelQrController extends Controller
             'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['integer'],
             'ukuran' => ['required', 'in:'.implode(',', array_keys(self::UKURAN))],
-        ], ['ids.required' => 'Pilih minimal satu unit.', 'ids.min' => 'Pilih minimal satu unit.', 'ukuran.in' => 'Ukuran label tidak dikenal.']);
+            'tata' => ['nullable', 'in:'.implode(',', self::TATA)],
+        ], ['ids.required' => 'Pilih minimal satu unit.', 'ids.min' => 'Pilih minimal satu unit.', 'ukuran.in' => 'Ukuran label tidak dikenal.', 'tata.in' => 'Tata letak label tidak dikenal.']);
+        $satuan = ($data['tata'] ?? 'a4') === 'satuan';
 
         $unit = PerlengkapanTerpasang::with('jenis', 'kecamatan')->whereIn('id', $ids)->aktif()->whereNotNull('kode')->orderBy('kode')->get();
         if ($unit->isEmpty()) {
@@ -48,9 +55,12 @@ class LabelQrController extends Controller
             'qr' => Qr::pngDataUri(route('aset', $a->kode)),
         ]);
 
+        $pt = fn (float $mm) => $mm * 72 / 25.4;
+
         return Pdf::loadView('pdf.label-qr', [
-            'halaman' => $label->chunk($kolom * $baris),
-            'lebar' => $lebar, 'tinggi' => $tinggi, 'kolom' => $kolom, 'ukuran' => $data['ukuran'],
-        ])->setPaper('a4')->download('label-qr-'.now()->format('Y-m-d').'.pdf');
+            'halaman' => $label->chunk($satuan ? 1 : $kolom * $baris),
+            'lebar' => $lebar, 'tinggi' => $tinggi, 'kolom' => $kolom, 'ukuran' => $data['ukuran'], 'satuan' => $satuan,
+        ])->setPaper($satuan ? [0, 0, $pt($lebar), $pt($tinggi)] : 'a4')
+            ->download('label-qr-'.($satuan ? 'satuan-' : '').now()->format('Y-m-d').'.pdf');
     }
 }

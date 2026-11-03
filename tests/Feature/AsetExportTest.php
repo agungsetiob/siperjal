@@ -130,10 +130,13 @@ class AsetExportTest extends TestCase
         $this->assertNull($tanpaKode->kode);
 
         foreach (['sedang', 'kecil'] as $ukuran) {
-            $res = $this->masuk('dishub')->post(route('terpasang.label'), ['ids' => [$ada->id, $tanpaKode->id, 99999], 'ukuran' => $ukuran]);
-            $res->assertOk();
-            $this->assertSame('application/pdf', $res->headers->get('content-type'));
+            foreach ([null, 'a4', 'satuan'] as $tata) {
+                $res = $this->masuk('dishub')->post(route('terpasang.label'), array_filter(['ids' => [$ada->id, $tanpaKode->id, 99999], 'ukuran' => $ukuran, 'tata' => $tata]));
+                $res->assertOk();
+                $this->assertSame('application/pdf', $res->headers->get('content-type'));
+            }
         }
+        $this->masuk('dishub')->post(route('terpasang.label'), ['ids' => [$ada->id], 'ukuran' => 'sedang', 'tata' => 'raksasa'])->assertSessionHasErrors('tata');
 
         $this->masuk('dishub')->from('/terpasang')->post(route('terpasang.label'), ['ids' => [$tanpaKode->id], 'ukuran' => 'sedang'])
             ->assertRedirect('/terpasang')->assertSessionHasErrors('ids');
@@ -166,5 +169,32 @@ class AsetExportTest extends TestCase
         $res->assertOk();
         $this->assertSame('application/pdf', $res->headers->get('content-type'));
         $this->assertSame(2, preg_match_all('#/Type\s*/Page[^s]#', $res->getContent())); // 30 label sedang = 2 lembar (24 + 6)
+    }
+
+    public function test_label_lembar_kedua_mulai_dari_baris_pertama(): void
+    {
+        $label = collect(range(1, 30))->map(fn ($n) => ['kode' => sprintf('RMB-%03d-BTL-26', $n), 'jenis' => 'Rambu', 'kecamatan' => 'Batulicin', 'qr' => 'data:image/png;base64,']);
+        $html = view('pdf.label-qr', ['halaman' => $label->chunk(24), 'lebar' => 60, 'tinggi' => 30, 'kolom' => 3, 'ukuran' => 'sedang', 'satuan' => false])->render();
+        preg_match_all('#style="left: [\d.]+mm; top: ([\d.]+)mm#', $html, $m);
+        $this->assertLessThan(297, max(array_map('floatval', $m[1]))); // chunk() mempertahankan key: tanpa values() label lembar 2 jatuh di luar kertas
+        $this->assertSame(28.5, (float) $m[1][24]); // label ke-25 = baris pertama lembar 2
+    }
+
+    public function test_label_satu_per_halaman_seukuran_label(): void
+    {
+        $this->masuk('dishub');
+        $jenis = JenisPerlengkapan::where('nama', 'like', 'Rambu%')->value('id');
+        $kec = Kecamatan::where('nama', 'Batulicin')->value('id');
+        $ids = collect(range(1, 3))->map(fn () => PerlengkapanTerpasang::create(['jenis_perlengkapan_id' => $jenis, 'jumlah' => 1, 'lat' => -3.45, 'lng' => 116.01, 'kecamatan_id' => $kec, 'terpasang_at' => '2026-08-14'])->id)->all();
+
+        foreach (['sedang' => ['170.07', '85.03'], 'kecil' => ['113.38', '56.69']] as $ukuran => [$w, $h]) {
+            $res = $this->post(route('terpasang.label'), ['ids' => $ids, 'ukuran' => $ukuran, 'tata' => 'satuan']);
+            $res->assertOk();
+            $this->assertStringContainsString('label-qr-satuan-', $res->headers->get('content-disposition'));
+            $pdf = $res->getContent();
+            $this->assertSame(3, preg_match_all('#/Type\s*/Page[^s]#', $pdf)); // satu label = satu halaman
+            preg_match('#/MediaBox\s*\[\s*0\.?0*\s+0\.?0*\s+([\d.]+)\s+([\d.]+)#', $pdf, $m);
+            $this->assertSame([$w, $h], [substr($m[1], 0, 6), substr($m[2], 0, 5)], "MediaBox {$ukuran}"); // 60×30 mm / 40×20 mm dalam pt
+        }
     }
 }
